@@ -1,56 +1,58 @@
 # skills-registry
 
-My frequently used Claude Code skills, managed in one place.
+Reusable Claude Code skill packages, managed in one place.
 
 ## Structure
 
+Each skill is a self-contained **package** directory:
+
 ```
-skills/
-  <skill-name>/
+<skill-name>/
+  commands/       # Slash commands → ~/.claude/commands/<skill-name>/
+    action.md
+  skills/         # Context skills → ~/.claude/skills/ (optional)
     SKILL.md
+  ref/            # Reference materials (not installed)
+  README.md
 ```
 
-Each subdirectory under `skills/` is a standalone Claude Code skill.
+A package can have `commands/`, `skills/`, or both. The `ref/` directory holds source materials for development and maintenance — it is never installed.
+
+## Available Packages
+
+| Package | Type | Description |
+|---------|------|-------------|
+| [slides](slides/) | commands | CI&T branded slide generation and auditing |
 
 ## Usage
 
-### Install all skills
-
-Symlink all skills into `~/.claude/skills/`:
+### Install all packages
 
 ```bash
 ./install.sh
 ```
 
-### Install a single skill
+### Install a single package
 
 ```bash
-./install.sh gitnexus-cli
+./install.sh slides
 ```
 
-### Uninstall all skills
-
-```bash
-./install.sh --uninstall
-```
-
-### List installed status
+### Check status
 
 ```bash
 ./install.sh --status
 ```
 
-## Adding a new skill
+### Uninstall all
 
-1. Create `skills/<skill-name>/SKILL.md` with the standard frontmatter:
-
-```markdown
----
-name: <skill-name>
-description: "When to trigger this skill"
----
-
-# Skill content here
+```bash
+./install.sh --uninstall
 ```
 
-2. Run `./install.sh <skill-name>` to symlink it.
+## Adding a new skill package
+
+1. Create `<skill-name>/` at the repo root
+2. Add `commands/` and/or `skills/` with your `.md` files
+3. Add a `README.md` describing the package
+4. Run `./install.sh <skill-name>` to symlink it
