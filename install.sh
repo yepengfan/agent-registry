@@ -93,14 +93,20 @@ uninstall_package() {
   local name="$1"
   local pkg_dir="$REGISTRY_DIR/$name"
 
-  # Remove commands symlink
+  # Remove commands symlink (only if it points back to this registry)
   local cmd_dst="$CLAUDE_DIR/commands/$name"
   if [[ -L "$cmd_dst" ]]; then
-    rm "$cmd_dst"
-    echo -e "${yellow}  Removed commands: $name${reset}"
+    local actual
+    actual="$(readlink "$cmd_dst")"
+    if [[ "$actual" == "$pkg_dir/commands" ]]; then
+      rm "$cmd_dst"
+      echo -e "${yellow}  Removed commands: $name${reset}"
+    else
+      echo -e "${yellow}  Skipped commands: $name (symlink points elsewhere: $actual)${reset}"
+    fi
   fi
 
-  # Remove skill symlinks
+  # Remove skill symlinks (only if they point back to this registry)
   if [[ -d "$pkg_dir/skills" ]]; then
     for skill_file in "$pkg_dir/skills"/*.md; do
       [[ -f "$skill_file" ]] || continue
@@ -108,8 +114,14 @@ uninstall_package() {
       fname="$(basename "$skill_file")"
       local skill_dst="$CLAUDE_DIR/skills/$fname"
       if [[ -L "$skill_dst" ]]; then
-        rm "$skill_dst"
-        echo -e "${yellow}  Removed skill: $fname${reset}"
+        local actual
+        actual="$(readlink "$skill_dst")"
+        if [[ "$actual" == "$skill_file" ]]; then
+          rm "$skill_dst"
+          echo -e "${yellow}  Removed skill: $fname${reset}"
+        else
+          echo -e "${yellow}  Skipped skill: $fname (symlink points elsewhere)${reset}"
+        fi
       fi
     done
   fi
@@ -146,8 +158,10 @@ show_status() {
     # Check skills
     if [[ -d "$pkg_dir/skills" ]]; then
       local all_linked=true
+      local has_skills=false
       for skill_file in "$pkg_dir/skills"/*.md; do
         [[ -f "$skill_file" ]] || continue
+        has_skills=true
         local fname
         fname="$(basename "$skill_file")"
         local skill_dst="$CLAUDE_DIR/skills/$fname"
@@ -156,7 +170,9 @@ show_status() {
           break
         fi
       done
-      if $all_linked; then
+      if ! $has_skills; then
+        :  # Empty skills/ dir, skip
+      elif $all_linked; then
         status="${status:+$status, }skills:${green}linked${reset}"
       else
         status="${status:+$status, }skills:${red}missing${reset}"
