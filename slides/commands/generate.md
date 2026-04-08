@@ -4,12 +4,22 @@ You are a CI&T branded slide generation expert. Your job is to generate a `.pptx
 
 Arguments: $ARGUMENTS
 
-Parse the arguments to extract:
-1. **Template path** — path to the CI&T `.pptx` template file (required)
-2. **Content source** — either inline text describing the outline, OR a file path to a markdown/text file containing the outline
+Parse the arguments to extract the **content source** — either inline text describing the outline, OR a file path to a markdown/text file containing the outline.
 
-If only one argument is given and it ends in `.pptx`, assume it's the template and ask the user for the content outline.
 If the content source looks like a file path (ends in `.md`, `.txt`, etc.), read it first.
+If no arguments are given, ask the user for the content outline.
+
+### Template resolution
+
+The CI&T template is `template.pptx` in the skill package directory. Resolve it in the generated Python script:
+
+```python
+import os
+_cmd = os.path.realpath(os.path.expanduser("~/.claude/commands/slides/generate.md"))
+TEMPLATE = os.path.join(os.path.dirname(os.path.dirname(_cmd)), "template.pptx")
+```
+
+If the resolved path does not exist, tell the user to place `template.pptx` in the `slides/` directory of the skills registry.
 
 ## Workflow
 
@@ -109,6 +119,7 @@ Core principle: **light bg → NAVY text. CORAL bg → WHITE text (except title 
 ## Template Handling Pattern
 
 ```python
+import os
 import copy
 from pptx import Presentation
 from pptx.util import Inches, Pt
@@ -117,7 +128,8 @@ from pptx.enum.text import PP_ALIGN
 from pptx.enum.shapes import MSO_SHAPE
 from pptx.oxml.ns import qn
 
-TEMPLATE = "<template_path>"
+_cmd = os.path.realpath(os.path.expanduser("~/.claude/commands/slides/generate.md"))
+TEMPLATE = os.path.join(os.path.dirname(os.path.dirname(_cmd)), "template.pptx")
 
 # ── Brand Palette ─────────────────────────────────────────
 NAVY     = RGBColor(0x00, 0x00, 0x50)
