@@ -21,7 +21,8 @@
     "lib/discovery.js",
     "agents/",
     "skills/",
-    "behaviors/"
+    "behaviors/",
+    "criteria/"
   ],
   "keywords": [
     "claude",

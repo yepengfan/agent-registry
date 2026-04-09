@@ -10,6 +10,9 @@ tools:
   - gh
 behaviors:
   - evidence-based-claims
+criteria:
+  - zero-must-fix-issues
+  - all-tests-pass
 interface:
   input: PR number or URL. Fetches diff and context via gh CLI.
   output: Posts inline review comments to GitHub PR. Returns JSON summary with issues array.
@@ -71,6 +74,27 @@ You receive a PR number or URL. Use `gh` to fetch all context you need.
 Read the reference documentation before every review:
 - `ref/review-checklist.md` — Standard review checklist and quality gates
 - `ref/coding-conventions.md` — Team coding conventions and style guide
+
+## Criteria Evaluation
+
+You have criteria injected into your prompt. For each criterion, include a `criteria_results` entry in your JSON output:
+
+```json
+{
+  "pr": 123,
+  "issues": [...],
+  "criteria_results": [
+    {"criterion": "<name>", "gate": <bool>, "pass": <bool>, "metric": "<key>", "value": <measured>, "detail": "<explanation>"}
+  ],
+  "summary": "Found N issues. Criteria: X/Y gates passing."
+}
+```
+
+Rules:
+- Every criterion in your injected criteria list MUST appear in `criteria_results`
+- `pass` is your judgment based on the criterion's `pass_when` condition
+- `value` is the raw measurement (number or string)
+- `detail` explains your reasoning
 
 ## Behavior
 

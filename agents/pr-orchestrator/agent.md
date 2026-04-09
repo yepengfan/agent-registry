@@ -40,6 +40,13 @@ To load sub-agent prompts:
 Parse the user's input to extract:
 - **PR identifier**: A number (e.g., `123`) or full URL
 - **Flags**: `--verify` enables a re-review cycle after fixes
+- **Criteria overrides**: `--criteria +name` (add), `--criteria -name` (remove), `--criteria name1,name2` (replace)
+
+When dispatching the reviewer, resolve the final criteria list:
+1. Read the reviewer's frontmatter to get default `criteria:` list
+2. Apply any caller `--criteria` overrides
+3. For each criterion name, read its body from `{registry_root}/criteria/{name}.md`
+4. Include the resolved criteria content in the reviewer's dispatch prompt
 
 ## Workflow
 
@@ -66,13 +73,15 @@ Use the **Agent tool** to spawn the pr-reviewer sub-agent:
 - Call `Agent(model: "sonnet", prompt: <reviewer body + "Review PR #<number> in this repository.">)`
 - Wait for completion and capture the JSON response
 
-### Step 4: Evaluate Review Results
+### Step 4: Evaluate Criteria Results
 
-Parse the reviewer's JSON output. Count `must-fix` issues.
+Parse the reviewer's JSON output. Check `criteria_results`:
 
-**If zero must-fix issues:**
-- Post a summary comment on the PR via `gh pr comment`
-- Exit. Workflow complete.
+- Extract all entries where `gate: true` and `pass: false`
+- If none → all gates pass. Post summary comment and exit.
+- If any → extract the failing gate details and corresponding issues, dispatch the fixer.
+
+Advisory criteria (`gate: false`) are reported in the summary but never block completion.
 
 ### Step 5: Dispatch the Fixer
 
@@ -93,7 +102,11 @@ Post a summary comment on the PR:
 gh pr comment <PR> --body "<summary>"
 ```
 
-Include: issues found, issues fixed, issues remaining, verify results (if applicable).
+Include:
+- Per-criterion results (pass/fail with detail, gate vs advisory)
+- If multi-round: which criteria flipped from fail→pass
+- Issues found, issues fixed, issues remaining
+- Verify results (if applicable)
 
 ## Error Handling
 
