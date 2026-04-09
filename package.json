@@ -4,6 +4,10 @@
   "description": "A unified registry for Claude Code agents and skills",
   "license": "MIT",
   "author": "Yepeng Fan",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yepengfan/agent-registry"
+  },
   "bin": {
     "agent-registry": "./bin/cli.js"
   },
