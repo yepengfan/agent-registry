@@ -7,6 +7,7 @@ A unified registry for Claude Code **agents**, **orchestrators**, and **skills**
 - **Agent** — A standalone prompt file (`agent.md`) with domain knowledge and skill dependencies. Agents can be activated as slash commands or installed into a project's CLAUDE.md.
 - **Orchestrator** — A special agent (`type: orchestrator`) that coordinates multiple sub-agents to complete a multi-step workflow. Orchestrators declare their sub-agents in the `subagents` frontmatter field.
 - **Skill** — A package of slash commands that extend Claude Code's capabilities. Skills are reusable across agents.
+- **Behavior** — A discipline rule (`behaviors/*.md`) that agents can equip via frontmatter. Behaviors are injected into agent prompts at install time, enforcing consistent practices like verification before committing or evidence-based claims.
 
 ## Structure
 
@@ -16,6 +17,8 @@ agent-registry/
     <agent-name>/
       agent.md          # Agent prompt + YAML frontmatter
       ref/              # Domain knowledge docs
+  behaviors/
+    <name>.md           # Discipline rules (injected at install time)
   skills/
     <skill-name>/
       commands/         # Slash commands -> ~/.claude/commands/<skill>/
@@ -32,19 +35,32 @@ agent-registry/
 
 ## Available Agents
 
-| Agent | Type | Model | Description | Skills | Tools |
-|-------|------|-------|-------------|--------|-------|
-| [cit-deck-creator](agents/cit-deck-creator/) | agent | sonnet | CI&T branded slide generation and auditing | slides | python-pptx |
+| Agent | Type | Model | Description | Behaviors | Tools |
+|-------|------|-------|-------------|-----------|-------|
+| [cit-deck-creator](agents/cit-deck-creator/) | agent | sonnet | CI&T branded slide generation and auditing | — | python-pptx |
 | [devops](agents/devops/) | agent | sonnet | Infrastructure and deployment specialist | — | docker, kubectl, terraform |
-| [pr-reviewer](agents/pr-reviewer/) | agent | sonnet | Reviews PR diffs for code quality and posts GitHub comments | — | gh |
-| [pr-fixer](agents/pr-fixer/) | agent | sonnet | Fixes must-fix review issues on PR branches | — | gh |
-| [pr-orchestrator](agents/pr-orchestrator/) | orchestrator | opus | Orchestrates PR review and fix workflow | — | gh |
+| [pr-reviewer](agents/pr-reviewer/) | agent | sonnet | Reviews PR diffs for code quality and posts GitHub comments | evidence-based-claims | gh |
+| [pr-fixer](agents/pr-fixer/) | agent | sonnet | Fixes must-fix review issues on PR branches | verification-gate, evidence-based-claims, no-blind-trust, safe-revert-on-failure, structured-pushback | gh |
+| [pr-orchestrator](agents/pr-orchestrator/) | orchestrator | opus | Orchestrates PR review and fix workflow | evidence-based-claims, independent-output-verification | gh |
 
 ## Available Skills
 
 | Skill | Description |
 |-------|-------------|
 | [slides](skills/slides/) | CI&T branded slide generation and auditing commands |
+
+## Available Behaviors
+
+Behaviors are discipline rules that agents can equip. They are injected into the agent prompt at install time.
+
+| Behavior | Description |
+|----------|-------------|
+| [verification-gate](behaviors/verification-gate.md) | Run verification command after changes, only commit on pass, revert on failure |
+| [evidence-based-claims](behaviors/evidence-based-claims.md) | Never claim success or status without fresh verification evidence |
+| [no-blind-trust](behaviors/no-blind-trust.md) | Verify findings and inputs before acting on them |
+| [independent-output-verification](behaviors/independent-output-verification.md) | Verify sub-agent outputs independently rather than trusting self-reported results |
+| [safe-revert-on-failure](behaviors/safe-revert-on-failure.md) | Revert changes that fail verification instead of committing broken code |
+| [structured-pushback](behaviors/structured-pushback.md) | Push back on incorrect findings with technical reasoning instead of blindly complying |
 
 ## Usage
 
@@ -86,9 +102,9 @@ Example output:
 Agents:
   cit-deck-creator  [not installed]
   devops            [installed]
-  pr-fixer          [not installed]  (used by: pr-orchestrator)
-  pr-orchestrator   [not installed]  (subagents: pr-reviewer ✗, pr-fixer ✗)
-  pr-reviewer       [not installed]  (used by: pr-orchestrator)
+  pr-fixer          [installed]  (used by: pr-orchestrator)  (behaviors: verification-gate, evidence-based-claims, no-blind-trust, safe-revert-on-failure, structured-pushback)
+  pr-orchestrator   [installed]  (subagents: pr-reviewer ✓, pr-fixer ✓)  (behaviors: evidence-based-claims, independent-output-verification)
+  pr-reviewer       [installed]  (used by: pr-orchestrator)  (behaviors: evidence-based-claims)
 
 Skills:
   slides  [not installed]
@@ -98,6 +114,14 @@ Skills:
 
 ```bash
 npx @yepengfan/agent-registry list
+```
+
+### Update installed agents and skills
+
+After changing behavior files, agent prompts, or skill content, reinstall everything to pick up the changes:
+
+```bash
+npx @yepengfan/agent-registry update
 ```
 
 ### Uninstall
@@ -130,6 +154,9 @@ skills:
   - skill-name
 tools:
   - external-tool
+behaviors:
+  - verification-gate
+  - evidence-based-claims
 ---
 
 Agent system prompt goes here...
@@ -148,8 +175,9 @@ Agent system prompt goes here...
 | tags | no | string[] | Category tags |
 | skills | no | string[] | Skill dependencies (auto-installed) |
 | tools | no | string[] | External tools (warnings if missing) |
+| behaviors | no | string[] | Behavior rules (injected at install time from `behaviors/`) |
 | subagents | no | string[] | Sub-agent names (required when `type: orchestrator`) |
-| interface | no | string | Interaction interface (e.g. `cli`, `slash-command`) |
+| interface | no | object | Input/output contract description |
 
 ### Validation Rules
 
@@ -157,6 +185,7 @@ Agent system prompt goes here...
 - `version` must be valid semver
 - `type` must be one of: `agent`, `orchestrator`
 - `model` must be one of: `opus`, `sonnet`, `haiku`
+- `behaviors` items must match `/^[a-zA-Z0-9_-]+$/` and correspond to files in `behaviors/`
 - `subagents` is required (and must be non-empty) when `type: orchestrator`
 - `subagents` is forbidden when `type` is not `orchestrator`
 
@@ -175,6 +204,9 @@ subagents:
   - pr-fixer
 tools:
   - gh
+behaviors:
+  - evidence-based-claims
+  - independent-output-verification
 ---
 
 Orchestrator prompt goes here...
@@ -194,6 +226,24 @@ Orchestrator prompt goes here...
 3. List all sub-agents in `subagents:` (they must exist in the registry)
 4. Set `model: opus` if this orchestrator coordinates complex multi-step work
 5. Run `npx @yepengfan/agent-registry install --agent <name>` to install (sub-agents install automatically)
+
+## Adding a New Behavior
+
+1. Create `behaviors/<name>.md` with frontmatter and rules:
+   ```markdown
+   ---
+   name: my-behavior
+   description: One-line description of the discipline rule
+   ---
+
+   ## My Behavior
+
+   Rules and instructions the agent must follow...
+   ```
+2. Add `- my-behavior` to the `behaviors` list in any agent's frontmatter
+3. Run `npx @yepengfan/agent-registry update` to reinstall agents with the new behavior
+
+Behaviors are injected between `<!-- behaviors:start -->` and `<!-- behaviors:end -->` markers in the installed agent file. They are self-contained — no runtime dependencies required.
 
 ## Adding a New Skill
 
