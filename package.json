@@ -1,0 +1,28 @@
+{
+  "name": "@yepengfan/agent-registry",
+  "version": "1.0.0",
+  "description": "A unified registry for Claude Code agents and skills",
+  "license": "MIT",
+  "author": "Yepeng Fan",
+  "bin": {
+    "agent-registry": "./bin/cli.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "bin/",
+    "lib/frontmatter.js",
+    "lib/installer.js",
+    "lib/discovery.js",
+    "agents/",
+    "skills/"
+  ],
+  "keywords": [
+    "claude",
+    "claude-code",
+    "agents",
+    "skills",
+    "registry"
+  ]
+}
