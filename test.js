@@ -506,6 +506,37 @@ console.log('\n--- Status Shows Criteria ---');
   rmrf(reg); rmrf(home);
 }
 
+// ── Update Picks Up Criteria Changes ──────────────────────
+
+console.log('\n--- Update Picks Up Criteria Changes ---');
+{
+  const reg = tmpDir();
+  const home = tmpDir();
+  fs.mkdirSync(path.join(reg, 'criteria'), { recursive: true });
+  fs.writeFileSync(path.join(reg, 'criteria', 'evolving.md'),
+    '---\nname: evolving\ndescription: V1\ngate: true\nmetric: m\npass_when: "equals 0"\n---\n\n## Evolving\n\nVersion one.\n');
+  writeAgent(reg, 'crit-up-agent',
+    'name: crit-up-agent\ndescription: U\nversion: 1.0.0\nauthor: Me\ncriteria:\n  - evolving',
+    'Agent body.');
+  copyLib(reg);
+  const cli = path.join(reg, 'bin', 'cli.js');
+  execFileSync(process.execPath, [cli, 'install', '--agent', 'crit-up-agent'], {
+    cwd: reg, env: { ...process.env, HOME: home }, encoding: 'utf8', timeout: 30000
+  });
+  const dst = path.join(home, '.claude', 'commands', 'crit-up-agent.md');
+  check('initial criteria install has v1', fs.readFileSync(dst, 'utf8').includes('Version one.'));
+  // Update the criteria file
+  fs.writeFileSync(path.join(reg, 'criteria', 'evolving.md'),
+    '---\nname: evolving\ndescription: V2\ngate: true\nmetric: m\npass_when: "equals 0"\n---\n\n## Evolving\n\nVersion two updated.\n');
+  // Run update
+  execFileSync(process.execPath, [cli, 'update'], {
+    cwd: reg, env: { ...process.env, HOME: home }, encoding: 'utf8', timeout: 30000
+  });
+  check('after update has v2 criteria', fs.readFileSync(dst, 'utf8').includes('Version two updated.'));
+  check('after update v1 criteria gone', !fs.readFileSync(dst, 'utf8').includes('Version one.'));
+  rmrf(reg); rmrf(home);
+}
+
 // ── Summary ─────────────────────────────────────────────────
 
 console.log(`\n=== Results: ${passed} passed, ${failed} failed ===`);
