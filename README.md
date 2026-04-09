@@ -37,8 +37,8 @@ agent-registry/
 
 | Agent | Type | Model | Description | Skills | Behaviors | Tools |
 |-------|------|-------|-------------|--------|-----------|-------|
-| [cit-deck-creator](agents/cit-deck-creator/) | agent | sonnet | CI&T branded slide generation and auditing | slides | — | python-pptx |
-| [devops](agents/devops/) | agent | sonnet | Infrastructure and deployment specialist | — | — | docker, kubectl, terraform |
+| [cit-deck-creator](agents/cit-deck-creator/) | agent | — | CI&T branded slide generation and auditing expert | slides | — | python-pptx |
+| [devops](agents/devops/) | agent | — | Infrastructure and deployment specialist | — | — | docker, kubectl, terraform |
 | [pr-reviewer](agents/pr-reviewer/) | agent | sonnet | Reviews PR diffs for code quality and posts GitHub comments | — | evidence-based-claims | gh |
 | [pr-fixer](agents/pr-fixer/) | agent | sonnet | Fixes must-fix review issues on PR branches | — | verification-gate, evidence-based-claims, no-blind-trust, safe-revert-on-failure, structured-pushback | gh |
 | [pr-orchestrator](agents/pr-orchestrator/) | orchestrator | opus | Orchestrates PR review and fix workflow | — | evidence-based-claims, independent-output-verification | gh |
@@ -182,10 +182,10 @@ Agent system prompt goes here...
 ### Validation Rules
 
 - `name` must match `/^[a-zA-Z0-9_-]+$/`
-- `version` must be valid semver
+- `version` is required (semver format recommended but not enforced at parse time)
 - `type` must be one of: `agent`, `orchestrator`
 - `model` must be one of: `opus`, `sonnet`, `haiku`
-- `behaviors` items must match `/^[a-zA-Z0-9_-]+$/` and correspond to files in `behaviors/`
+- `behaviors` items must match `/^[a-zA-Z0-9_-]+$/` (file existence in `behaviors/` is verified at install time)
 - `subagents` is required (and must be non-empty) when `type: orchestrator`
 - `subagents` is forbidden when `type` is not `orchestrator`
 
