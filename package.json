@@ -12,7 +12,9 @@
   },
   "files": [
     "bin/",
-    "lib/",
+    "lib/frontmatter.js",
+    "lib/installer.js",
+    "lib/discovery.js",
     "agents/",
     "skills/"
   ],

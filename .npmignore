@@ -1,0 +1,15 @@
+# Test files
+test.js
+lib/test-frontmatter.js
+
+# Python artifacts
+lib/__pycache__/
+*.pyc
+
+# Docs and specs
+docs/
+.omc/
+
+# Dev files
+.gitignore
+.claude/
