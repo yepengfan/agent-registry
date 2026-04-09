@@ -18,21 +18,26 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 18
-          registry-url: https://registry.npmjs.org
 
       - name: Run tests
         run: node test.js
 
       - name: Sync version from git tag
         run: |
-          TAG="${{ github.event.release.tag_name }}"
-          VERSION="${TAG#v}"
+          VERSION=$(echo "$TAG" | sed 's/^v//')
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "::error::Tag '$TAG' is not valid semver: '$VERSION'"
+            exit 1
+          fi
+          export VERSION
           node -e "
             const pkg = require('./package.json');
-            pkg.version = '${VERSION}';
+            pkg.version = process.env.VERSION;
             require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
           "
           echo "Publishing version ${VERSION}"
+        env:
+          TAG: ${{ github.event.release.tag_name }}
 
       - name: Publish to npm
         run: npm publish --access=public --provenance
