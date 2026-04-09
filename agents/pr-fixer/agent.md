@@ -8,6 +8,12 @@ model: sonnet
 tags: [pr-workflow, code-quality]
 tools:
   - gh
+behaviors:
+  - verification-gate
+  - evidence-based-claims
+  - no-blind-trust
+  - safe-revert-on-failure
+  - structured-pushback
 interface:
   input: PR number, branch name, and list of must-fix issues as JSON array.
   output: Fixes committed and pushed. Returns JSON summary with fixed and unfixed arrays.

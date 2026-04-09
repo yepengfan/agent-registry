@@ -11,6 +11,9 @@ subagents:
   - pr-fixer
 tools:
   - gh
+behaviors:
+  - evidence-based-claims
+  - independent-output-verification
 interface:
   input: PR number or URL. Optional --verify flag.
   output: Review comments posted to GitHub, must-fix issues fixed, final summary comment posted.

@@ -8,6 +8,8 @@ model: sonnet
 tags: [pr-workflow, code-quality]
 tools:
   - gh
+behaviors:
+  - evidence-based-claims
 interface:
   input: PR number or URL. Fetches diff and context via gh CLI.
   output: Posts inline review comments to GitHub PR. Returns JSON summary with issues array.
