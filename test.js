@@ -457,6 +457,55 @@ console.log('\n--- Both Behaviors and Criteria ---');
   rmrf(reg); rmrf(home);
 }
 
+// ── List Shows Criteria ────────────────────────────────────
+
+console.log('\n--- List Shows Criteria ---');
+{
+  const reg = tmpDir();
+  fs.mkdirSync(path.join(reg, 'criteria'), { recursive: true });
+  fs.writeFileSync(path.join(reg, 'criteria', 'my-criterion.md'),
+    '---\nname: my-criterion\ndescription: A quality gate\ngate: true\nmetric: m\npass_when: "equals 0"\n---\n\nContent.\n');
+  fs.mkdirSync(path.join(reg, 'agents'), { recursive: true });
+  copyLib(reg);
+  let out = '';
+  try {
+    out = execFileSync(process.execPath, [path.join(reg, 'bin', 'cli.js'), 'list'], {
+      cwd: reg, encoding: 'utf8', timeout: 30000
+    });
+  } catch (e) { out = (e.stdout || '').toString(); }
+  check('list shows criteria section', /criteria/i.test(out));
+  check('list shows my-criterion', out.includes('my-criterion'));
+  check('list shows criteria description', out.includes('A quality gate'));
+  rmrf(reg);
+}
+
+// ── Status Shows Criteria ──────────────────────────────────
+
+console.log('\n--- Status Shows Criteria ---');
+{
+  const reg = tmpDir();
+  const home = tmpDir();
+  fs.mkdirSync(path.join(reg, 'criteria'), { recursive: true });
+  fs.writeFileSync(path.join(reg, 'criteria', 'test-gate.md'),
+    '---\nname: test-gate\ndescription: G\ngate: true\nmetric: m\npass_when: "equals 0"\n---\n\nContent.\n');
+  writeAgent(reg, 'crit-agent',
+    'name: crit-agent\ndescription: C\nversion: 1.0.0\nauthor: Me\ncriteria:\n  - test-gate',
+    'Body.');
+  copyLib(reg);
+  const cli = path.join(reg, 'bin', 'cli.js');
+  execFileSync(process.execPath, [cli, 'install', '--agent', 'crit-agent'], {
+    cwd: reg, env: { ...process.env, HOME: home }, encoding: 'utf8', timeout: 30000
+  });
+  let out = '';
+  try {
+    out = execFileSync(process.execPath, [cli, 'status'], {
+      cwd: reg, env: { ...process.env, HOME: home }, encoding: 'utf8', timeout: 30000
+    });
+  } catch (e) { out = (e.stdout || '').toString(); }
+  check('status shows criteria for agent', out.includes('criteria:') && out.includes('test-gate'));
+  rmrf(reg); rmrf(home);
+}
+
 // ── Summary ─────────────────────────────────────────────────
 
 console.log(`\n=== Results: ${passed} passed, ${failed} failed ===`);
