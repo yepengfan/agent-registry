@@ -463,8 +463,12 @@ console.log('\n--- List Shows Criteria ---');
 {
   const reg = tmpDir();
   fs.mkdirSync(path.join(reg, 'criteria'), { recursive: true });
+  // gate: true criterion — should show [gate] tag
   fs.writeFileSync(path.join(reg, 'criteria', 'my-criterion.md'),
     '---\nname: my-criterion\ndescription: A quality gate\ngate: true\nmetric: m\npass_when: "equals 0"\n---\n\nContent.\n');
+  // gate: false criterion — should show [advisory] tag
+  fs.writeFileSync(path.join(reg, 'criteria', 'my-advisory.md'),
+    '---\nname: my-advisory\ndescription: An advisory check\ngate: false\nmetric: m2\npass_when: "equals 0"\n---\n\nAdvisory content.\n');
   fs.mkdirSync(path.join(reg, 'agents'), { recursive: true });
   copyLib(reg);
   let out = '';
@@ -476,6 +480,8 @@ console.log('\n--- List Shows Criteria ---');
   check('list shows criteria section', /criteria/i.test(out));
   check('list shows my-criterion', out.includes('my-criterion'));
   check('list shows criteria description', out.includes('A quality gate'));
+  check('gate:true criterion shows [gate] tag', out.includes('[gate]'));
+  check('gate:false criterion shows [advisory] tag', out.includes('[advisory]'));
   rmrf(reg);
 }
 
