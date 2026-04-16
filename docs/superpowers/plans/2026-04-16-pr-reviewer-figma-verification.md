@@ -4,7 +4,7 @@
 
 **Goal:** Add Figma design verification to the pr-reviewer agent so it catches UI mismatches against Figma designs when SDD steering files are present in the repo.
 
-**Architecture:** Three existing files are modified: the reviewer's workflow (agent.md) gets a new conditional Figma verification step, the review checklist gets a "Design Fidelity" section with specific mismatch patterns, and coding conventions gets a "Frontend Design Conventions" section. The Figma step is conditional — only triggered when `.sdd/steering/feature-*-figma.md` files exist in the target repo. Figma MCP tools (`get_screenshot`, `get_design_context`) are used to fetch design references. Existing code review functionality is preserved unchanged.
+**Architecture:** Three existing files are modified: the reviewer's workflow (agent.md) gets a new conditional Figma verification step, the review checklist gets a "Design Fidelity" section with specific mismatch patterns, and coding conventions gets a "Frontend Design Conventions" section. The Figma step is conditional — only triggered when `.sdd/steering/feature-*-figma.md` files exist in the target repo. Figma MCP tools (`get_screenshot`, `get_design_context`) fetch design references, and Playwright MCP captures rendered page screenshots from the locally running dev server for side-by-side visual comparison. Existing code review functionality is preserved unchanged.
 
 **Tech Stack:** Markdown (agent prompts), Figma MCP tools
 
@@ -88,6 +88,7 @@ to:
 tools:
   - gh
   - figma_mcp
+  - playwright
 ```
 
 - [ ] **Step 2: Add Step 3.5 — Figma Design Verification**
@@ -97,31 +98,40 @@ Insert the following new step between the existing step 3 ("For each changed fil
 ```markdown
 4. **Figma Design Verification** (conditional — skip if no steering files found):
 
+   **Prerequisite:** The frontend dev server must be running locally. Do not start or stop it yourself.
+
    a. Check if the repo has SDD steering files:
       ```bash
       ls .sdd/steering/feature-*-figma.md 2>/dev/null
       ```
       If no files found, skip this step entirely.
 
-   b. For each steering file found, read it to extract the Figma file key and node IDs:
+   b. For each steering file found, read it to extract:
+      - Figma file key and node IDs per screen
+      - The localhost route/URL for each screen
       ```bash
       cat .sdd/steering/feature-<name>-figma.md
       ```
 
    c. Identify which screens are affected by the PR's changed files. Match changed file paths against the screens documented in the steering file.
 
-   d. For each affected screen, fetch the Figma design screenshot:
+   d. For each affected screen, capture both the design reference and the rendered implementation:
+
+      **Figma design screenshot:**
       ```
       figma:get_screenshot(fileKey="<key>", nodeId="<nodeId>")
       ```
 
-   e. Compare the Figma screenshot against the implementation code for each screen. Check every item in the "Design Fidelity" section of `ref/review-checklist.md`.
+      **Rendered implementation screenshot** (via Playwright MCP):
+      Navigate to the screen's localhost URL and capture a screenshot of the rendered page.
+
+   e. Compare the Figma screenshot against the rendered screenshot side-by-side. Check every item in the "Design Fidelity" section of `ref/review-checklist.md`. This is a visual comparison — rendered UI vs Figma design, not code reading.
 
    f. For each mismatch found, classify severity:
       - **must-fix**: Wrong layout structure, missing elements, wrong container dimensions, elements in wrong position, wrong component used
       - **suggestion**: Minor spacing token refinements, polish items, small alignment tweaks
 
-   g. Add all design mismatches to your issues array with `"category": "design"` to distinguish them from code quality issues.
+   g. Add all design mismatches to your issues array with `"category": "design"` to distinguish them from code quality issues. Include what differs, expected (from Figma), and actual (from rendered screenshot).
 ```
 
 - [ ] **Step 3: Update Severity Levels section**
