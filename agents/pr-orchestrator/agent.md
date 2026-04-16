@@ -125,7 +125,7 @@ This enables the reviewer's severity escalation rule for persistent suggestions.
 **Environmental Blockers:** If the fixer reports issues as `unfixed` with reasons that are environmental (e.g., "MCP server not available", "cannot access page", "auth required"), track these as `environment_blocked` items. In subsequent rounds:
 - Do NOT dispatch the fixer for environment_blocked issues — they cannot be fixed by code changes
 - Report them in the round summary as "blocked by environment"
-- If all must-fix issues in a round are environment_blocked, treat the round as clean for the purposes of the consecutive clean counter (the code itself has no fixable issues)
+- If all must-fix issues in a round are environment_blocked (no fixable code issues remain), exit the loop early with a summary reporting that the PR has no code-level must-fix issues but has unresolved environmental blockers. Recommend manual verification for the blocked criteria before merge. Do NOT count environment_blocked rounds as clean — gate criteria failures cannot be bypassed.
 
 If `round >= max_rounds`:
 - Post a summary comment reporting that the maximum round limit was reached
