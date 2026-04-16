@@ -150,6 +150,13 @@ If `round >= max_rounds`:
    - **Verify fixes independently** (run test suite, check git log)
    - Post a round summary comment on the PR
    - Loop back to step 1 (dispatch reviewer to re-review)
+   **Note:** When re-dispatching the reviewer, include any design suggestions from prior rounds as context:
+   ```
+   ## Prior Round Suggestions
+   These design suggestions have been flagged in prior rounds but not fixed:
+   - [round N]: <suggestion description>
+   ```
+   This enables the reviewer's severity escalation rule for persistent suggestions.
 
 ### Step 4: Post Final Summary
 

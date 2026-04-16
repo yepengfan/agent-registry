@@ -23,6 +23,8 @@ UI implementation must match the linked Figma design specification.
 
 2. **Read the Figma steering file** (`.sdd/steering/feature-*-figma.md`) or extract Figma URL from PR description for the file key and node IDs.
 
+   If no steering file exists AND no Figma URL is found in the PR description, report `pass: true` with detail: "No Figma design reference found — criterion not applicable for this PR."
+
 3. **PRIMARY CHECK — Visual comparison (requires Playwright):**
    a. Navigate to each affected screen via Playwright (`browser_navigate`)
    b. Wait for content to render, then take a rendered screenshot (`browser_take_screenshot`)

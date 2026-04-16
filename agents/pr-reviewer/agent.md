@@ -152,7 +152,7 @@ You receive a PR number or URL. Use `gh` to fetch all context you need.
 
 Design must-fix issues are treated as regular must-fix issues and count toward the `must_fix_count` for the `zero-must-fix-issues` criterion gate.
 
-**Severity Escalation:** Issues flagged as "suggestion" in 3+ prior review rounds without being fixed MUST be escalated to "must-fix" in the current round. Persistent suggestions indicate the fix is being deprioritized but the mismatch remains.
+**Severity Escalation:** If the orchestrator includes a "Prior Round Suggestions" section in your dispatch prompt listing design suggestions from previous rounds, any suggestion that has appeared in 3+ prior rounds MUST be escalated to "must-fix" in the current round. Persistent suggestions indicate the fix is being deprioritized but the mismatch remains.
 
 **Always must-fix (never suggestion):**
 - Text content doesn't match Figma (i18n value mismatch)
