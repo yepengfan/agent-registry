@@ -110,7 +110,7 @@ The orchestrator runs a review-fix loop until the required number of consecutive
 - `consecutive_clean = 0`
 - `round = 0`
 - `required_clean = N` (from `--rounds` flag, default 3)
-- `max_rounds = required_clean * 3` (safety cap — default 9)
+- `max_rounds = required_clean * 10` (safety cap — default 30)
 
 **Prior Round Context:** When dispatching the reviewer in any round after the first, include accumulated suggestions (both code and design) from all prior rounds:
 ```

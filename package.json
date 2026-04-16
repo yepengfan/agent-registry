@@ -11,6 +11,9 @@
   "bin": {
     "agent-registry": "./bin/cli.js"
   },
+  "scripts": {
+    "postinstall": "node bin/cli.js install"
+  },
   "engines": {
     "node": ">=18"
   },
