@@ -25,7 +25,7 @@
 
 ## Design Fidelity (when `.sdd/steering/feature-*-figma.md` exists)
 
-Skip this section if no `.sdd/steering/feature-*-figma.md` files are found in the repo.
+Skip this section if no `.sdd/steering/feature-*-figma.md` files are found in the repo AND no Figma URL is present in the PR description.
 
 ### Structural Checks
 - [ ] Does the layout structure match Figma? (element order, flex direction, alignment)

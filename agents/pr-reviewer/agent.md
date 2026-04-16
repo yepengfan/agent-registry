@@ -53,12 +53,12 @@ You receive a PR number or URL. Use `gh` to fetch all context you need.
       If neither steering files nor a Figma URL is found, skip this step entirely.
       If skipping, still emit a `criteria_results` entry for `figma-design-match` with `pass: true` and detail: "No Figma design reference found — criterion not applicable for this PR."
 
-   b. For each steering file found, read it to extract:
-      - Figma file key and node IDs per screen
-      - The localhost route/URL for each screen
-      ```bash
-      cat .sdd/steering/feature-<name>-figma.md
-      ```
+   b. Extract Figma references:
+      - **If steering files found**, read each to extract Figma file key, node IDs, and localhost route per screen:
+        ```bash
+        cat .sdd/steering/feature-<name>-figma.md
+        ```
+      - **If no steering files but a Figma URL exists in the PR description**, extract the file key and node ID from the URL (format: `figma.com/design/:fileKey/:fileName?node-id=:nodeId`). In this case, localhost routes are unknown — use `figma:get_design_context` to understand which screens are represented and match against changed files by component/page name.
 
    c. Identify which screens are affected by the PR's changed files.
 
