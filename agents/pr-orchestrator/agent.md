@@ -73,7 +73,7 @@ Read profile definitions from `{registry_root}/profiles/*.md`. Each profile has 
 
 ### Criteria Resolution
 
-Replace the current criteria resolution (Step 3 in Workflow) with:
+Criteria are resolved before dispatching the reviewer:
 
 1. If a profile matched AND the detected task type exists in the profile's criteria map → use `profile.criteria[taskType]`
 2. If a profile matched but task type is unknown → use `profile.criteria["feature"]` (broadest)
