@@ -42,13 +42,13 @@ agent-registry/
 
 ## Available Agents
 
-| Agent | Type | Model | Description | Criteria | Behaviors |
-|-------|------|-------|-------------|----------|-----------|
-| [cit-deck-creator](agents/cit-deck-creator/) | agent | — | CI&T branded slide generation and auditing expert | — | — |
-| [devops](agents/devops/) | agent | — | Infrastructure and deployment specialist | — | — |
-| [pr-reviewer](agents/pr-reviewer/) | agent | sonnet | Reviews PR diffs for code quality and Figma design verification (two-pass: rendered screenshot + code) | zero-must-fix-issues, all-tests-pass | evidence-based-claims |
-| [pr-fixer](agents/pr-fixer/) | agent | sonnet | Fixes must-fix review issues on PR branches | — | verification-gate, evidence-based-claims, no-blind-trust, safe-revert-on-failure, structured-pushback |
-| [pr-orchestrator](agents/pr-orchestrator/) | orchestrator | opus | Review-fix loop until N consecutive clean runs (default 3). Auto-detects current branch PR. `--rounds N` configurable. | — | evidence-based-claims, independent-output-verification |
+| Agent | Type | Model | Description | Skills | Criteria | Behaviors | Tools |
+|-------|------|-------|-------------|--------|----------|-----------|-------|
+| [cit-deck-creator](agents/cit-deck-creator/) | agent | — | CI&T branded slide generation and auditing expert | slides | — | — | python-pptx |
+| [devops](agents/devops/) | agent | — | Infrastructure and deployment specialist | — | — | — | docker, kubectl, terraform |
+| [pr-reviewer](agents/pr-reviewer/) | agent | sonnet | Reviews PR diffs for code quality and Figma design verification (two-pass: rendered screenshot + code) | — | zero-must-fix-issues, all-tests-pass | evidence-based-claims | gh, figma_mcp, playwright |
+| [pr-fixer](agents/pr-fixer/) | agent | sonnet | Fixes must-fix review issues on PR branches | — | — | verification-gate, evidence-based-claims, no-blind-trust, safe-revert-on-failure, structured-pushback | gh |
+| [pr-orchestrator](agents/pr-orchestrator/) | orchestrator | opus | Review-fix loop until N consecutive clean runs (default 3). Auto-detects current branch PR. `--rounds N` configurable. | — | — | evidence-based-claims, independent-output-verification | gh |
 
 ## Available Skills
 
