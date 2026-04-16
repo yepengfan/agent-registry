@@ -118,10 +118,10 @@ You receive a PR number or URL. Use `gh` to fetch all context you need.
 
 ### Design-Specific Severity
 
-When a Figma steering file is present, design mismatches follow these severity rules:
+When a Figma steering file is present, design mismatches follow these severity rules. Design must-fix issues are treated as regular must-fix issues and count toward the `must_fix_count` for the `zero-must-fix-issues` criterion gate.
 
-- **must-fix (design)**: Wrong layout structure (flex direction, element order), missing UI elements, wrong container dimensions (width/height off by more than cosmetic), elements positioned incorrectly, wrong design system component used
-- **suggestion (design)**: Minor spacing differences (within ~4px), token refinement opportunities, polish items that don't affect usability or layout
+- **must-fix**: Wrong layout structure (flex direction, element order), missing UI elements, wrong container dimensions (width/height off by more than cosmetic), elements positioned incorrectly, wrong design system component used
+- **suggestion**: Minor spacing differences (within ~4px), token refinement opportunities, polish items that don't affect usability or layout
 
 ## Domain Knowledge
 
