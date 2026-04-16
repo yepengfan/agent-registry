@@ -18,7 +18,7 @@ UI implementation must match the linked Figma design specification.
 ### Evaluation Workflow
 1. Extract Figma URL from PR description body. If none found, report `pass: true` with detail: "No Figma design reference linked in PR description"
 2. Use Figma MCP `get_design_context` and `get_screenshot` to obtain the design reference
-3. Use Playwright MCP to start the dev server and capture screenshots of the affected pages
+3. Use Playwright MCP to capture screenshots of the affected pages from the locally running dev server (the dev server must already be running — do not start or stop it yourself)
 4. Compare the implementation against the design for:
    - **Layout**: element positioning, spacing, alignment
    - **Colors**: fill, border, text colors match design tokens
