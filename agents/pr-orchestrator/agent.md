@@ -124,7 +124,9 @@ No Figma design reference found — figma-design-match criterion is not applicab
 
 ### Step 2c: Pre-verify MCP Tool Availability
 
-Before entering the review loop, probe each required MCP to verify it is available. This eliminates the reviewer's need to discover tools by checking config files.
+**Skip this step if Step 2b determined that figma-design-match is not applicable** (no steering file and no Figma URL). MCP probing is only needed when Figma verification will run.
+
+When Figma verification IS applicable, probe each required MCP to verify it is available. This eliminates the reviewer's need to discover tools by checking config files.
 
 1. **Probe Playwright:** Call `mcp__playwright__browser_snapshot`. If it returns (even "no page open" or an accessibility tree), set `playwright_available = true`. If it errors, set `playwright_available = false`.
 

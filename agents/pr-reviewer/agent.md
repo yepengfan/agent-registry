@@ -47,70 +47,68 @@ You receive a PR number or URL. Use `gh` to fetch all context you need.
    gh api repos/{owner}/{repo}/contents/{path}?ref={head_branch}
    ```
 
-4. **Figma Design Verification** (conditional — skip if no steering files found):
+4. **Figma Design Verification** (conditional — skip if no Figma reference found):
 
    **Prerequisite:** The frontend dev server must be running locally. Do not start or stop it yourself.
 
-   a. Check if Figma design references exist:
-      - Check for SDD steering files: `ls .sdd/steering/ 2>/dev/null | grep -i figma`
-      - Check the PR description body for a Figma URL (e.g., `figma.com/design/...`)
-      If neither steering files nor a Figma URL is found, skip this step entirely.
+   **Orchestrator-injected context:** When dispatched by the orchestrator, your prompt includes pre-verified `## Figma Steering Context` and `## Available Tools` sections. Use these directly instead of re-discovering steering files or probing tool availability. The instructions below are fallbacks for when you are invoked outside the orchestrator.
+
+   a. **Check if Figma design references exist:**
+      - If the orchestrator provided a `## Figma Steering Context` section, use it directly.
+      - Otherwise, discover locally: `ls .sdd/steering/ 2>/dev/null | grep -i figma`
+      - Also check the PR description body for a Figma URL (e.g., `figma.com/design/...`)
+      If no Figma reference is found (orchestrator says "not applicable" OR local discovery finds nothing), skip this step entirely.
       If skipping AND `figma-design-match` is in your injected criteria list, emit a `criteria_results` entry with `pass: true` and detail: "No Figma design reference found — criterion not applicable for this PR."
 
-   b. Extract Figma references:
-      - **If steering files found**, read each to extract Figma file key, node IDs, and localhost route per screen.
-      - **If no steering files but a Figma URL exists in the PR description**, extract the file key and node ID from the URL (format: `figma.com/design/:fileKey/:fileName?node-id=:nodeId`).
+   b. **Extract Figma references** from the steering context or discovered files: file key, node IDs, and localhost route per screen. If only a PR-description Figma URL is available, extract the file key and node ID from the URL format `figma.com/design/:fileKey/:fileName?node-id=:nodeId`.
 
    c. Identify which screens are affected by the PR's changed files.
 
-   d. Check prerequisites: Both Figma MCP and Playwright MCP must be available.
-      - If Figma MCP is missing: report `pass: false` with detail `"Figma MCP not available — cannot perform automated verification"`
-      - If Playwright MCP is missing: report `pass: false` with detail `"Playwright MCP not available — cannot perform automated verification"`
+   d. **Check tool availability:**
+      - If the orchestrator provided an `## Available Tools` section, read the availability status directly. If a tool says `NOT AVAILABLE`, report `pass: false` with the appropriate detail and stop.
+      - If no Available Tools section was provided (running outside orchestrator), attempt to call the tools and report `pass: false` if they fail.
       - There is no screenshot fallback. Automated extraction is the only valid evaluation method.
 
    **Phase 1 — Figma Element Inventory**
 
    Extract a structured inventory of every meaningful visible element from each affected Figma screen.
 
-   Use the `figma-inspect` skill if available, or run the extraction script from the `figma-design-match` criterion directly via `figma:use_figma`.
+   Use the tool names from the `## Available Tools` section if provided. Otherwise use the full MCP tool names:
+   - Figma extraction: `mcp__plugin_figma_figma__use_figma` (pass the script from `scripts/figma-extract.js`)
+   - Token definitions: `mcp__plugin_figma_figma__get_variable_defs`
 
-   The extraction walks the Figma node tree and returns a flat JSON array with properties for every meaningful element: text content, fontSize, fontWeight, colors, padding, gap, borders, borderRadius, component names, and annotations.
+   Locate the extraction script: run `agent-registry root` to get the registry directory, then read `{registry_root}/scripts/figma-extract.js`. Replace `__NODE_ID__` with the target node ID and pass the script to `mcp__plugin_figma_figma__use_figma`.
 
-   e. For each affected screen, run the Figma element extraction and store the inventory.
+   e. For each affected screen, run the Figma element extraction and save the inventory as a JSON file.
 
    **Phase 2 — DOM Element Inventory**
 
    Extract computed styles from the rendered page for every meaningful DOM element.
 
-   Use the `design-verify` skill if available, or run the DOM extraction script from the `figma-design-match` criterion directly via Playwright `browser_evaluate`.
+   Use the tool names from the `## Available Tools` section if provided. Otherwise use the full MCP tool names:
+   - Navigation: `mcp__playwright__browser_navigate`
+   - Script execution: `mcp__playwright__browser_evaluate`
+   - Screenshot: `mcp__playwright__browser_take_screenshot`
 
-   f. Navigate to each affected page URL on localhost via `browser_navigate`.
-   g. Wait for content to render. Perform any required interactions (click buttons to open drawers, scroll to sections).
-   h. Run the DOM extraction script via `browser_evaluate` to collect: tag, dimensions, position, text content, semantic attributes, computed backgroundColor, color, fontSize, fontWeight, padding, gap, borderRadius, and border widths.
+   f. Navigate to each affected page URL on localhost via `mcp__playwright__browser_navigate`.
+   g. Wait for content to render. Perform any required interactions (click, scroll).
+   h. Read `{registry_root}/scripts/dom-extract.js`, replace `__ROOT_SELECTOR__` with the target selector, and pass it to `mcp__playwright__browser_evaluate`. Save the inventory as a JSON file.
 
-   **Phase 3 — Map + Diff**
+   **Phase 3+4 — Map, Diff, and Report**
 
-   Map Figma elements to DOM elements using this priority cascade:
-   1. **Text match** — Figma TEXT `characters` matching DOM element `text`
-   2. **Semantic role** — Figma INSTANCE component names to DOM element types (Button→button, Input→input)
-   3. **Structural position** — same depth/order in both trees
-   4. **Container match** — matching background color and padding
+   Run the deterministic comparison script — do NOT implement the mapping/diffing algorithm yourself:
+   ```bash
+   REGISTRY_ROOT=$(agent-registry root)
+   node "$REGISTRY_ROOT/scripts/design-diff.js" figma-inventory.json dom-inventory.json
+   ```
 
-   i. Compare every shared property with tolerances:
-      - Dimensions (width, height): +/-4px
-      - Spacing (padding, gap): +/-2px
-      - Colors: Exact match (normalize hex to rgb)
-      - Typography (fontSize, fontWeight): Exact match
-      - Border radius: +/-1px
-      - Text content / placeholder: Exact string match
-      - State (disabled): Exact boolean match
-      - Border sides: Exact match
+   The script codifies the mapping cascade, tolerance thresholds, color normalization, font weight mapping, and fix hint generation. It outputs JSON conforming to the `figma-design-match` output contract. Exit code 0 = pass, 1 = fail.
 
-   **Phase 4 — Report**
+   i. Parse the script's JSON output.
 
-   j. For each mismatch found, generate an actionable `fix_hint` with the correct DS token mapping. Classify severity per the Design Severity rules below.
+   j. For each mismatch, classify severity per the Design Severity rules below.
 
-   k. Add all design mismatches to your issues array with `"category": "design"`. Each design issue MUST include structured mismatch data:
+   k. Add all design mismatches to your issues array with `"category": "design"`. Each design issue MUST include the structured mismatch data from the script output:
       ```json
       {
         "severity": "must-fix",
