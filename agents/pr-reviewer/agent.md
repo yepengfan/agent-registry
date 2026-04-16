@@ -77,7 +77,7 @@ You receive a PR number or URL. Use `gh` to fetch all context you need.
    - Figma extraction: `mcp__plugin_figma_figma__use_figma` (pass the script from `scripts/figma-extract.js`)
    - Token definitions: `mcp__plugin_figma_figma__get_variable_defs`
 
-   Locate the extraction script: run `agent-registry root` to get the registry directory, then read `{registry_root}/scripts/figma-extract.js`. Replace `__NODE_ID__` with the target node ID and pass the script to `mcp__plugin_figma_figma__use_figma`.
+   Locate the extraction script: use the `Registry root` path from the orchestrator's `## Context` section (or run `agent-registry root` as fallback). Read `{registry_root}/scripts/figma-extract.js`, replace `__NODE_ID__` with the target node ID, and pass the script to `mcp__plugin_figma_figma__use_figma`.
 
    e. For each affected screen, run the Figma element extraction and save the inventory as a JSON file.
 
@@ -92,7 +92,7 @@ You receive a PR number or URL. Use `gh` to fetch all context you need.
 
    f. Navigate to each affected page URL on localhost via `mcp__playwright__browser_navigate`.
    g. Wait for content to render. Perform any required interactions (click, scroll).
-   h. Read `{registry_root}/scripts/dom-extract.js`, replace `__ROOT_SELECTOR__` with the target selector, and pass it to `mcp__playwright__browser_evaluate`. Save the inventory as a JSON file.
+   h. Read `{registry_root}/scripts/dom-extract.js` (using the registry root from `## Context`), replace `__ROOT_SELECTOR__` with the target selector, and pass it to `mcp__playwright__browser_evaluate`. Save the inventory as a JSON file.
 
    **Phase 3+4 — Map, Diff, and Report**
 
@@ -106,7 +106,13 @@ You receive a PR number or URL. Use `gh` to fetch all context you need.
 
    i. Parse the script's JSON output.
 
-   j. For each mismatch, classify severity per the Design Severity rules below.
+   j. **Map each mismatch to a source file and line.** The script outputs `figma_element` and `dom_element` identifiers (e.g., "Button container", `div[data-testid='...']`), but issues need `file` and `line`. For each mismatch:
+      - Use the `dom_element` identifier (tag, testId, text content) to search the PR's changed files for the component that renders it
+      - Check the `fix_hint` — it often names a CSS class or DS token that can be grepped in the codebase
+      - If the element maps to a specific component file, use that file and the line where the relevant style/class is applied
+      - If the exact line can't be determined, use the component file's top-level element (line 1) and note "exact line unknown" in the message
+
+   k. For each mismatch, classify severity per the Design Severity rules below.
 
    k. Add all design mismatches to your issues array with `"category": "design"`. Each design issue MUST include the structured mismatch data from the script output:
       ```json

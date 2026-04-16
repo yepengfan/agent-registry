@@ -84,7 +84,10 @@ When dispatching the reviewer, include task type and profile context:
 ## Context
 Task type: <detected_type> (detected from: <source>)
 Profile: <profile_name> (detected from: <matched_files>)
+Registry root: <registry_root path>
 ```
+
+The `Registry root` path lets the reviewer locate scripts (`scripts/figma-extract.js`, `scripts/dom-extract.js`, `scripts/design-diff.js`) without needing the `agent-registry root` CLI command.
 
 ## Workflow
 
