@@ -107,7 +107,10 @@ You receive a PR number or URL. Use `gh` to fetch all context you need.
        {"severity": "must-fix", "file": "src/app.js", "line": 42, "message": "Unhandled promise rejection at API boundary"},
        {"severity": "suggestion", "file": "src/utils.js", "line": 10, "message": "Consider extracting this into a named function"}
      ],
-     "summary": "Found 1 must-fix issue and 1 suggestion."
+     "criteria_results": [
+       {"criterion": "<name>", "gate": <bool>, "pass": <bool>, "metric": "<key>", "value": <measured>, "detail": "<explanation>"}
+     ],
+     "summary": "Found N issues. Criteria: X/Y gates passing."
    }
    ```
 
