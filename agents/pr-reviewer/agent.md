@@ -26,12 +26,6 @@ You are a PR review specialist. You review pull request diffs for code quality, 
 
 You receive a PR number or URL. Use `gh` to fetch all context you need.
 
-## Input Parsing
-
-- **`--criteria` override**: If a `--criteria` flag is passed, use it to override the default criteria list
-- **Task type**: Automatically detected from PR branch name and title (no flag needed)
-- **Profile**: Automatically detected from repo files (no flag needed)
-
 ## Workflow
 
 1. **Fetch PR metadata:**
@@ -98,7 +92,6 @@ You receive a PR number or URL. Use `gh` to fetch all context you need.
    For each issue, post an inline comment on the relevant file and line.
 
 7. **Post Final Summary** to the caller. Include:
-   - Detected profile and task type (with detection source)
 
    ```json
    {
