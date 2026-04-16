@@ -7,6 +7,9 @@ type: agent
 model: sonnet
 color: blue
 tags: [pr-workflow, code-quality]
+skills:
+  - figma-inspect
+  - design-verify
 tools:
   - gh
   - figma_mcp
@@ -55,71 +58,80 @@ You receive a PR number or URL. Use `gh` to fetch all context you need.
       If skipping AND `figma-design-match` is in your injected criteria list, emit a `criteria_results` entry with `pass: true` and detail: "No Figma design reference found — criterion not applicable for this PR."
 
    b. Extract Figma references:
-      - **If steering files found**, read each to extract Figma file key, node IDs, and localhost route per screen:
-        ```bash
-        cat .sdd/steering/feature-<name>-figma.md
-        ```
-      - **If no steering files but a Figma URL exists in the PR description**, extract the file key and node ID from the URL (format: `figma.com/design/:fileKey/:fileName?node-id=:nodeId`). In this case, localhost routes are unknown — use `figma:get_design_context` to understand which screens are represented and match against changed files by component/page name.
+      - **If steering files found**, read each to extract Figma file key, node IDs, and localhost route per screen.
+      - **If no steering files but a Figma URL exists in the PR description**, extract the file key and node ID from the URL (format: `figma.com/design/:fileKey/:fileName?node-id=:nodeId`).
 
    c. Identify which screens are affected by the PR's changed files.
 
-   **Pass 1 — Rendered Screenshot Comparison (PRIMARY)**
+   d. Check prerequisites: Both Figma MCP and Playwright MCP must be available.
+      - If Figma MCP is missing: report `pass: false` with detail `"Figma MCP not available — cannot perform automated verification"`
+      - If Playwright MCP is missing: report `pass: false` with detail `"Playwright MCP not available — cannot perform automated verification"`
+      - There is no screenshot fallback. Automated extraction is the only valid evaluation method.
 
-   This is the authoritative check. It requires both Figma MCP and Playwright MCP.
+   **Phase 1 — Figma Element Inventory**
 
-   **Note:** Pass 1 (rendered screenshot comparison) requires a known localhost URL for each screen. If only a PR-description Figma URL is available (no steering file with localhost routes), skip Pass 1 and proceed directly to Pass 2 (code + data verification). Report in criteria_results that rendered comparison was not possible due to unknown localhost routes.
+   Extract a structured inventory of every meaningful visible element from each affected Figma screen.
 
-   When Pass 1 is skipped due to unknown localhost routes, if `figma-design-match` is in your injected criteria list, set `figma-design-match` to `pass: false` with detail explaining that rendered screenshot comparison was not possible (no localhost URL available) and recommend manual visual QA before merge.
+   Use the `figma-inspect` skill if available, or run the extraction script from the `figma-design-match` criterion directly via `figma:use_figma`.
 
-   d. For each affected screen, capture the rendered implementation via Playwright MCP:
-      - Use `browser_navigate` to load the page URL on localhost
-      - Wait for content to render (use `browser_wait_for` if needed)
-      - Take a screenshot via `browser_take_screenshot`
+   The extraction walks the Figma node tree and returns a flat JSON array with properties for every meaningful element: text content, fontSize, fontWeight, colors, padding, gap, borders, borderRadius, component names, and annotations.
 
-   e. Fetch the Figma reference screenshot:
+   e. For each affected screen, run the Figma element extraction and store the inventory.
+
+   **Phase 2 — DOM Element Inventory**
+
+   Extract computed styles from the rendered page for every meaningful DOM element.
+
+   Use the `design-verify` skill if available, or run the DOM extraction script from the `figma-design-match` criterion directly via Playwright `browser_evaluate`.
+
+   f. Navigate to each affected page URL on localhost via `browser_navigate`.
+   g. Wait for content to render. Perform any required interactions (click buttons to open drawers, scroll to sections).
+   h. Run the DOM extraction script via `browser_evaluate` to collect: tag, dimensions, position, text content, semantic attributes, computed backgroundColor, color, fontSize, fontWeight, padding, gap, borderRadius, and border widths.
+
+   **Phase 3 — Map + Diff**
+
+   Map Figma elements to DOM elements using this priority cascade:
+   1. **Text match** — Figma TEXT `characters` matching DOM element `text`
+   2. **Semantic role** — Figma INSTANCE component names to DOM element types (Button→button, Input→input)
+   3. **Structural position** — same depth/order in both trees
+   4. **Container match** — matching background color and padding
+
+   i. Compare every shared property with tolerances:
+      - Dimensions (width, height): +/-4px
+      - Spacing (padding, gap): +/-2px
+      - Colors: Exact match (normalize hex to rgb)
+      - Typography (fontSize, fontWeight): Exact match
+      - Border radius: +/-1px
+      - Text content / placeholder: Exact string match
+      - State (disabled): Exact boolean match
+      - Border sides: Exact match
+
+   **Phase 4 — Report**
+
+   j. For each mismatch found, generate an actionable `fix_hint` with the correct DS token mapping. Classify severity per the Design Severity rules below.
+
+   k. Add all design mismatches to your issues array with `"category": "design"`. Each design issue MUST include structured mismatch data:
+      ```json
+      {
+        "severity": "must-fix",
+        "file": "src/components/Screen.tsx",
+        "line": 42,
+        "message": "padding-left: Figma=24px, Rendered=32px",
+        "category": "design",
+        "figma_value": "24px",
+        "dom_value": "32px",
+        "fix_hint": "Use pl-lg (24px) not pl-xl (32px). DS token: spacing.l=24"
+      }
       ```
-      figma:get_screenshot(fileKey="<key>", nodeId="<nodeId>")
-      ```
 
-   f. Compare the TWO SCREENSHOTS visually — rendered UI vs Figma design:
-      - **Layout**: Is the visual structure the same? Element order, alignment, grouping?
-      - **Dimensions**: Do containers, inputs, columns look the same width/height?
-      - **Typography**: Does the text look the same size, weight, color?
-      - **Buttons**: Are they in the same positions? Same grouping (left vs right)?
-      - **States**: Do disabled/active/hover states look correct?
-      - **Content**: Does the TEXT CONTENT match? (Not just "a string is there" — the ACTUAL WORDS)
-      - **Icons**: Are all icons present where Figma shows them?
-      - **Empty states**: How does the UI look with no data vs with data?
+   l. Include the full `inventory` and `mismatches` array in the `figma-design-match` criteria_results entry per the output contract in the criterion definition.
 
-   **Pass 2 — Code + Data Verification (SUPPLEMENTARY)**
+   **When Playwright Can't Access the Page:**
 
-   After visual comparison, verify implementation details:
-
-   g. **i18n value verification:**
-      - Read the actual string values from fallback.json / en-US.json
-      - Compare each visible text string against what Figma shows
-      - Flag any text that doesn't match EXACTLY
-
-   h. **Runtime data awareness:**
-      - Check API response types — what shape does real data have?
-      - Will the data fit within the designed column widths?
-      - Are there truncation/overflow handlers for long content?
-
-   i. **DS component state verification:**
-      - For each disabled/loading/error state, verify the DS component actually renders the correct visual style
-      - Don't trust that `disabled` prop = grey appearance — verify it
-
-   **Fallback — When Playwright Can't Access the Page:**
-
-   If Playwright cannot access the page (auth issues, feature flags, etc.):
-   1. Report in criteria_results: "Playwright could not access page: [reason]"
-   2. Fall back to Pass 2 only (code + data verification)
-   3. If `figma-design-match` is in your injected criteria list, set figma-design-match to `pass: false` with detail explaining the limitation
-   4. Recommend manual visual verification before merge
-
-   j. For each mismatch found, classify severity per the Design Severity rules below.
-
-   k. Add all design mismatches to your issues array with `"category": "design"`. Include what differs, expected (from Figma), and actual (from rendered screenshot or code).
+   If Playwright cannot navigate (auth issues, feature flags, etc.):
+   1. Report `pass: false` with detail: `"Playwright could not access page: <reason> — cannot perform automated verification"`
+   2. Do not fall back to code-only analysis or screenshot comparison
+   3. Report the blocker explicitly so it can be resolved
 
 5. **Analyze every change** against the review checklist and coding conventions in your `ref/` docs.
 
@@ -164,7 +176,7 @@ Design must-fix issues are treated as regular must-fix issues and count toward t
 - Text content doesn't match Figma (i18n value mismatch)
 - Element is present in Figma but missing in implementation
 - Element is in wrong position (wrong section, wrong side)
-- Container dimensions are visibly wrong in rendered screenshot
+- Container dimensions differ beyond tolerance (Figma vs DOM)
 - DS component renders a different visual state than Figma shows
 
 **Suggestion only:**

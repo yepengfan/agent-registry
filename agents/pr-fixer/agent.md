@@ -51,6 +51,13 @@ You receive:
       git commit -m "Fix: <concise description of what was fixed>"
       ```
 
+   **Design issues** (`"category": "design"`) include structured mismatch data:
+   - `figma_value` — the value specified in the Figma design
+   - `dom_value` — the value currently rendered in the DOM
+   - `fix_hint` — actionable fix with the correct DS token or CSS override
+
+   When a design issue includes a `fix_hint`, use it directly rather than guessing the correct value. The hint references exact DS tokens, spacing values, or CSS overrides verified against the Figma source.
+
 4. **Push all fixes:**
    ```bash
    git push origin <branch>

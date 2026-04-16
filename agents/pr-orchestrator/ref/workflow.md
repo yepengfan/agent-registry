@@ -54,7 +54,7 @@ User: /pr-orchestrator <PR> [--rounds N]    (default N=3)
   "pr": 123,
   "issues": [
     {"severity": "must-fix", "file": "src/app.js", "line": 42, "message": "..."},
-    {"severity": "must-fix", "file": "src/components/Drawer.tsx", "line": 15, "message": "Container width 620px does not match Figma (890px)", "category": "design"},
+    {"severity": "must-fix", "file": "src/components/Drawer.tsx", "line": 15, "message": "padding-left: Figma=24px, Rendered=32px", "category": "design", "figma_value": "24px", "dom_value": "32px", "fix_hint": "Use pl-lg (24px) not pl-xl (32px). DS token: spacing.l=24"},
     {"severity": "suggestion", "file": "src/utils.js", "line": 10, "message": "..."}
   ],
   "criteria_results": [
