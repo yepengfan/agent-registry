@@ -66,6 +66,8 @@ You receive a PR number or URL. Use `gh` to fetch all context you need.
 
    This is the authoritative check. It requires both Figma MCP and Playwright MCP.
 
+   **Note:** Pass 1 (rendered screenshot comparison) requires a known localhost URL for each screen. If only a PR-description Figma URL is available (no steering file with localhost routes), skip Pass 1 and proceed directly to Pass 2 (code + data verification). Report in criteria_results that rendered comparison was not possible due to unknown localhost routes.
+
    d. For each affected screen, capture the rendered implementation via Playwright MCP:
       - Use `browser_navigate` to load the page URL on localhost
       - Wait for content to render (use `browser_wait_for` if needed)

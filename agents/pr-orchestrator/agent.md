@@ -128,7 +128,7 @@ If `round >= max_rounds`:
 - Exit the loop
 
 1. **Dispatch the Reviewer**
-   - Read the body of `agents/pr-reviewer/agent.md` (everything after frontmatter)
+   - Read the body of `{registry_root}/agents/pr-reviewer/agent.md` (everything after frontmatter)
    - Call `Agent(model: "sonnet", prompt: <reviewer body + "Review PR #<number> in this repository.">)`
    - Wait for completion and capture the JSON response
    - Increment `round`
@@ -148,7 +148,7 @@ If `round >= max_rounds`:
    - Reset `consecutive_clean = 0`
    - **Dispatch the Fixer:**
      - Extract only `must-fix` issues
-     - Read the body of `agents/pr-fixer/agent.md`
+     - Read the body of `{registry_root}/agents/pr-fixer/agent.md`
      - Call `Agent(model: "sonnet", prompt: <fixer body + issue list>)`
      - Wait for completion and capture the JSON response
    - **Verify fixes independently** (run test suite, check git log)
