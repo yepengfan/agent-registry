@@ -51,7 +51,7 @@ You receive a PR number or URL. Use `gh` to fetch all context you need.
       - Check for SDD steering files: `ls .sdd/steering/feature-*-figma.md 2>/dev/null`
       - Check the PR description body for a Figma URL (e.g., `figma.com/design/...`)
       If neither steering files nor a Figma URL is found, skip this step entirely.
-      If skipping, still emit a `criteria_results` entry for `figma-design-match` with `pass: true` and detail: "No Figma design reference found — criterion not applicable for this PR."
+      If skipping AND `figma-design-match` is in your injected criteria list, emit a `criteria_results` entry with `pass: true` and detail: "No Figma design reference found — criterion not applicable for this PR."
 
    b. Extract Figma references:
       - **If steering files found**, read each to extract Figma file key, node IDs, and localhost route per screen:
@@ -68,7 +68,7 @@ You receive a PR number or URL. Use `gh` to fetch all context you need.
 
    **Note:** Pass 1 (rendered screenshot comparison) requires a known localhost URL for each screen. If only a PR-description Figma URL is available (no steering file with localhost routes), skip Pass 1 and proceed directly to Pass 2 (code + data verification). Report in criteria_results that rendered comparison was not possible due to unknown localhost routes.
 
-   When Pass 1 is skipped due to unknown localhost routes, set `figma-design-match` to `pass: false` with detail explaining that rendered screenshot comparison was not possible (no localhost URL available) and recommend manual visual QA before merge.
+   When Pass 1 is skipped due to unknown localhost routes, if `figma-design-match` is in your injected criteria list, set `figma-design-match` to `pass: false` with detail explaining that rendered screenshot comparison was not possible (no localhost URL available) and recommend manual visual QA before merge.
 
    d. For each affected screen, capture the rendered implementation via Playwright MCP:
       - Use `browser_navigate` to load the page URL on localhost
@@ -113,7 +113,7 @@ You receive a PR number or URL. Use `gh` to fetch all context you need.
    If Playwright cannot access the page (auth issues, feature flags, etc.):
    1. Report in criteria_results: "Playwright could not access page: [reason]"
    2. Fall back to Pass 2 only (code + data verification)
-   3. Set figma-design-match to `pass: false` with detail explaining the limitation
+   3. If `figma-design-match` is in your injected criteria list, set figma-design-match to `pass: false` with detail explaining the limitation
    4. Recommend manual visual verification before merge
 
    j. For each mismatch found, classify severity per the Design Severity rules below.
