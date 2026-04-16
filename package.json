@@ -28,7 +28,8 @@
     "skills/",
     "behaviors/",
     "criteria/",
-    "profiles/"
+    "profiles/",
+    "scripts/"
   ],
   "keywords": [
     "claude",

@@ -29,252 +29,44 @@ If either MCP is unavailable, report `pass: false` with detail: `"<tool> MCP not
 
 3. **Phase 1 — Figma Element Inventory** (via `figma:use_figma` Plugin API)
 
-   Run a JavaScript function via `figma:use_figma` that walks the Figma node tree from the screen root and returns a flat JSON array of every meaningful visible element.
+   Locate the registry root via `agent-registry root`. Read the extraction script from `{registry_root}/scripts/figma-extract.js`. Replace `__NODE_ID__` with the target Figma node ID. Pass the entire script to `figma:use_figma` as the `code` parameter.
 
-   **Elements to extract:**
-   - **TEXT nodes:** `characters` (text content), `fontSize`, `fontName.style` (weight), `lineHeight`, fills color (text color)
-   - **FRAME/INSTANCE with auto-layout:** `layoutMode`, `paddingLeft/Right/Top/Bottom`, `itemSpacing` (gap), `counterAxisSpacing`
-   - **FRAME/INSTANCE with fills:** fills color (background color)
-   - **FRAME/INSTANCE with strokes:** strokes color, `strokeWeight` (border)
-   - **All visible nodes:** `width`, `height`, `cornerRadius`, `visible`, `name`, `type`
-   - **INSTANCE nodes:** `mainComponent.name` (DS component identification)
-   - **Nodes with descriptions:** `description` (annotations/interaction specs)
+   The script walks the Figma node tree and returns a JSON inventory of every meaningful visible element with: text content, fontSize, fontWeight, lineHeight, text color, layout mode, padding, gap, background color, border color/width, corner radius, component names, and annotations. Invisible nodes and pure wrappers are filtered out.
 
-   **Filter out:** Invisible nodes (`visible === false`), pure wrapper frames with no visual properties, clip masks, vector graphics internals.
+   Save the JSON output as `figma-inventory.json`.
 
-   **Extraction script:**
-
-   ```javascript
-   function rgbToHex(r, g, b) {
-     const toHex = (v) => Math.round(v * 255).toString(16).padStart(2, '0');
-     return '#' + toHex(r) + toHex(g) + toHex(b);
-   }
-
-   function extractInventory(rootNode) {
-     const elements = [];
-
-     function walk(node, depth, parentPath) {
-       if (!node.visible) return;
-
-       const el = {
-         id: node.id,
-         name: node.name,
-         type: node.type,
-         depth: depth,
-         path: parentPath + '/' + node.name,
-         width: Math.round(node.width),
-         height: Math.round(node.height),
-       };
-
-       // Text properties
-       if (node.type === 'TEXT') {
-         el.text = node.characters;
-         el.fontSize = node.fontSize;
-         el.fontWeight = node.fontName?.style;
-         el.lineHeight = typeof node.lineHeight === 'object'
-           ? node.lineHeight.value : node.lineHeight;
-         if (node.fills?.length > 0 && node.fills[0].type === 'SOLID') {
-           const c = node.fills[0].color;
-           el.textColor = rgbToHex(c.r, c.g, c.b);
-         }
-       }
-
-       // Layout properties (auto-layout frames)
-       if ('layoutMode' in node && node.layoutMode !== 'NONE') {
-         el.layout = node.layoutMode;
-         el.padding = {
-           top: node.paddingTop, right: node.paddingRight,
-           bottom: node.paddingBottom, left: node.paddingLeft
-         };
-         el.gap = node.itemSpacing;
-       }
-
-       // Fill (background color)
-       if ('fills' in node && node.fills?.length > 0
-           && node.fills[0].type === 'SOLID'
-           && node.fills[0].visible !== false) {
-         const c = node.fills[0].color;
-         el.backgroundColor = rgbToHex(c.r, c.g, c.b);
-         el.backgroundOpacity = node.fills[0].opacity ?? 1;
-       }
-
-       // Stroke (border)
-       if ('strokes' in node && node.strokes?.length > 0
-           && node.strokes[0].visible !== false) {
-         const c = node.strokes[0].color;
-         el.borderColor = rgbToHex(c.r, c.g, c.b);
-         el.borderWidth = node.strokeWeight;
-       }
-
-       // Corner radius
-       if ('cornerRadius' in node && node.cornerRadius !== 0) {
-         el.borderRadius = typeof node.cornerRadius === 'number'
-           ? node.cornerRadius
-           : {
-               tl: node.topLeftRadius, tr: node.topRightRadius,
-               br: node.bottomRightRadius, bl: node.bottomLeftRadius
-             };
-       }
-
-       // Component instance info
-       if (node.type === 'INSTANCE' && node.mainComponent) {
-         el.componentName = node.mainComponent.name;
-       }
-
-       // Annotations (interaction specs)
-       if (node.description) {
-         el.annotation = node.description;
-       }
-
-       // Determine if meaningful
-       const isMeaningful = node.type === 'TEXT'
-         || (node.type === 'INSTANCE')
-         || (el.backgroundColor && el.backgroundOpacity > 0.01)
-         || (el.borderColor)
-         || (el.layout)
-         || (el.annotation);
-
-       if (isMeaningful) elements.push(el);
-
-       // Recurse
-       if ('children' in node) {
-         for (const child of node.children) {
-           walk(child, depth + 1, el.path || parentPath);
-         }
-       }
-     }
-
-     walk(rootNode, 0, '');
-     return elements;
-   }
-   ```
-
-   If the `figma-inspect` skill is available, invoke it instead of running this script manually.
+   If the `figma-inspect` skill is available, invoke it instead.
 
 4. **Phase 2 — DOM Element Inventory** (via Playwright `browser_evaluate`)
 
-   Navigate to the page via Playwright, perform any required interactions (click buttons to open drawers, etc.), then run a JavaScript function via `browser_evaluate` that walks the rendered DOM and extracts the same properties.
+   Navigate to the page via Playwright, perform any required interactions (click buttons to open drawers, etc.). Read the extraction script from `{registry_root}/scripts/dom-extract.js`. Replace `__ROOT_SELECTOR__` with the target CSS selector (e.g., `body` or `#app`). Pass the entire script to `browser_evaluate`.
 
-   **Extraction script:**
+   The script walks the rendered DOM and returns a JSON inventory of every meaningful element with: tag, dimensions, position, text content, semantic attributes (role, data-testid, placeholder, disabled), and computed styles (backgroundColor, color, fontSize, fontWeight, padding, gap, borderRadius, border widths).
 
-   ```javascript
-   function extractDomInventory(rootSelector) {
-     const root = document.querySelector(rootSelector);
-     if (!root) return { error: 'Root element not found: ' + rootSelector };
+   Save the JSON output as `dom-inventory.json`.
 
-     const elements = [];
+   If the `design-verify` skill is available, invoke it instead.
 
-     function walk(node, depth) {
-       if (!(node instanceof HTMLElement)) return;
-       const style = getComputedStyle(node);
-       if (style.display === 'none' || style.visibility === 'hidden') return;
+5. **Phase 3+4 — Map, Diff, and Report**
 
-       const rect = node.getBoundingClientRect();
-       const rootRect = root.getBoundingClientRect();
-
-       const el = {
-         tag: node.tagName.toLowerCase(),
-         depth: depth,
-         width: Math.round(rect.width),
-         height: Math.round(rect.height),
-         x: Math.round(rect.left - rootRect.left),
-         y: Math.round(rect.top - rootRect.top),
-       };
-
-       // Text content (direct text only, not children's text)
-       const directText = Array.from(node.childNodes)
-         .filter(n => n.nodeType === Node.TEXT_NODE)
-         .map(n => n.textContent.trim())
-         .join('')
-         .trim();
-       if (directText) el.text = directText;
-
-       // Semantic attributes
-       if (node.getAttribute('role')) el.role = node.getAttribute('role');
-       if (node.getAttribute('data-testid')) el.testId = node.getAttribute('data-testid');
-       if (node.placeholder) el.placeholder = node.placeholder;
-       if (node.disabled) el.disabled = true;
-       if (node.tagName === 'H1' || node.tagName === 'H2'
-           || node.tagName === 'H3') el.heading = true;
-
-       // Computed styles
-       const bg = style.backgroundColor;
-       if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
-         el.backgroundColor = bg;
-       }
-
-       el.color = style.color;
-       el.fontSize = style.fontSize;
-       el.fontWeight = style.fontWeight;
-
-       const pad = {
-         top: style.paddingTop, right: style.paddingRight,
-         bottom: style.paddingBottom, left: style.paddingLeft
-       };
-       if (Object.values(pad).some(v => v !== '0px')) el.padding = pad;
-
-       if (style.gap && style.gap !== 'normal') el.gap = style.gap;
-       if (style.borderRadius && style.borderRadius !== '0px') {
-         el.borderRadius = style.borderRadius;
-       }
-
-       const borderR = style.borderRightWidth;
-       const borderB = style.borderBottomWidth;
-       const borderL = style.borderLeftWidth;
-       const borderT = style.borderTopWidth;
-       if ([borderR, borderB, borderL, borderT].some(v => v !== '0px')) {
-         el.border = {
-           top: borderT, right: borderR,
-           bottom: borderB, left: borderL
-         };
-       }
-
-       // Determine if meaningful
-       const isMeaningful =
-         el.text || el.heading || el.role || el.testId || el.placeholder ||
-         el.backgroundColor || el.border ||
-         ['button', 'input', 'textarea', 'table', 'th', 'td',
-          'label', 'h1', 'h2', 'h3', 'p'].includes(el.tag);
-
-       if (isMeaningful) elements.push(el);
-
-       // Recurse
-       for (const child of node.children) {
-         walk(child, depth + 1);
-       }
-     }
-
-     walk(root, 0);
-     return elements;
-   }
+   Run the deterministic comparison script:
+   ```bash
+   node {registry_root}/scripts/design-diff.js figma-inventory.json dom-inventory.json
    ```
 
-   If the `design-verify` skill is available, invoke it instead of running this script manually.
+   Optionally pass a token map for richer fix hints:
+   ```bash
+   node {registry_root}/scripts/design-diff.js figma-inventory.json dom-inventory.json --token-map tokens.json
+   ```
 
-5. **Phase 3 — Map + Diff**
+   The script codifies the full mapping and diffing algorithm:
+   - **Mapping cascade:** text match → semantic role → structural position → container match
+   - **Tolerance thresholds:** dimensions +/-4px, spacing +/-2px, colors exact, typography exact, border radius +/-1px, text exact, state exact, borders exact
+   - **Color normalization:** Figma hex to rgb, rgba(r,g,b,1) to rgb(r,g,b)
+   - **Font weight mapping:** Figma style names (e.g., "Semi Bold") to numeric weights (e.g., "600")
+   - **Fix hint generation:** with DS token names when a token map is provided
 
-   Map Figma elements to DOM elements using this priority cascade:
-   1. **Text match** — Figma TEXT element with `characters` matching DOM element with same text content
-   2. **Semantic role** — Figma INSTANCE `"Button-Primary"` maps to DOM `<button>`, INSTANCE `"Input"` maps to DOM `<input>`
-   3. **Structural position** — elements at the same depth/order in both trees
-   4. **Container match** — Figma auto-layout frame with specific bg/padding maps to DOM element with matching bg/padding
-
-   For each mapped pair, compare every shared property with these tolerances:
-
-   | Property | Tolerance |
-   |----------|-----------|
-   | Dimensions (width, height) | +/-4px (DS components may add internal padding) |
-   | Spacing (padding, gap) | +/-2px |
-   | Colors | Exact match (normalize Figma hex to rgb for comparison) |
-   | Typography (fontSize, fontWeight) | Exact match |
-   | Border radius | +/-1px |
-   | Text content / placeholder | Exact string match |
-   | State (disabled) | Exact boolean match |
-   | Border sides (which sides have borders) | Exact match |
-
-6. **Phase 4 — Report**
-
-   Produce a structured diff report as the criterion output.
+   The script outputs JSON conforming to the output contract below. Exit code 0 = pass, 1 = fail.
 
 ### Pass
 
