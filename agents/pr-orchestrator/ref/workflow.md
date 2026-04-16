@@ -9,16 +9,20 @@ User: /pr-orchestrator <PR> [--verify]
   ORCHESTRATOR (Opus)
   1. gh auth status
   2. gh pr view <PR>
+  3. Detect task type (branch/title)
+  4. Detect repo profile (file detection)
+  5. Resolve criteria (profile + task type + overrides)
          |
          v
   REVIEWER (Sonnet) — Agent tool, model: "sonnet"
   - Fetch diff + context
   - Analyze code
   - Post GH comments
+  - Evaluate criteria
   - Return JSON
          |
          v
-  Any must-fix? --no--> Post clean summary, exit
+  Any gate failing? --no--> Post clean summary, exit
          |
         yes
          v

@@ -22,7 +22,8 @@
     "agents/",
     "skills/",
     "behaviors/",
-    "criteria/"
+    "criteria/",
+    "profiles/"
   ],
   "keywords": [
     "claude",

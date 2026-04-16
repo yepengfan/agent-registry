@@ -41,12 +41,48 @@ Parse the user's input to extract:
 - **PR identifier**: A number (e.g., `123`) or full URL
 - **Flags**: `--verify` enables a re-review cycle after fixes
 - **Criteria overrides**: `--criteria +name` (add), `--criteria -name` (remove), `--criteria name1,name2` (replace)
+- **Task type**: Automatically detected from PR branch name and title (no flag needed)
+- **Profile**: Automatically detected from repo files (no flag needed)
 
 When dispatching the reviewer, resolve the final criteria list:
 1. Read the reviewer's frontmatter to get default `criteria:` list
 2. Apply any caller `--criteria` overrides
 3. For each criterion name, read its body from `{registry_root}/criteria/{name}.md`
 4. Include the resolved criteria content in the reviewer's dispatch prompt
+
+## Profile and Task Type Detection
+
+Before resolving criteria, detect the repo profile and task type:
+
+### Task Type Detection
+
+Detect from PR metadata (first match wins):
+
+1. **Branch prefix**: `feat/`→feature, `fix/`/`bugfix/`/`hotfix/`→bugfix, `refactor/`→refactor
+2. **PR title prefix**: `feat:`→feature, `fix:`→bugfix, `refactor:`→refactor
+3. **Title keywords**: "add/implement/new/create"→feature, "fix/resolve/bug/patch"→bugfix, "refactor/restructure"→refactor
+4. **Default**: feature (broadest criteria set)
+
+### Repo Profile Detection
+
+Read profile definitions from `{registry_root}/profiles/*.md`. Each profile has `detect-files` listing files that must exist in the repo root. Check which profile's files all exist in the current repo. If multiple match, highest `detect-priority` wins.
+
+### Criteria Resolution
+
+Replace the current criteria resolution (Step 3 in Workflow) with:
+
+1. If a profile matched AND the detected task type exists in the profile's criteria map → use `profile.criteria[taskType]`
+2. If a profile matched but task type is unknown → use `profile.criteria["feature"]` (broadest)
+3. If no profile matched → fall back to the reviewer's frontmatter `criteria:` list (current behavior)
+4. Apply any `--criteria` overrides on top of the resolved list
+
+When dispatching the reviewer, include task type and profile context:
+
+```
+## Context
+Task type: <detected_type> (detected from: <source>)
+Profile: <profile_name> (detected from: <matched_files>)
+```
 
 ## Workflow
 
@@ -107,6 +143,7 @@ Include:
 - If multi-round: which criteria flipped from fail→pass
 - Issues found, issues fixed, issues remaining
 - Verify results (if applicable)
+- Detected profile and task type (with detection source)
 
 ## Error Handling
 

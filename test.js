@@ -60,6 +60,18 @@ try {
   check('frontmatter parser tests all pass', false, (e.stdout || '').toString().split('\n').pop());
 }
 
+// ── Profile Module ──────────────────────────────────────────
+
+console.log('\n--- Profile Module ---');
+try {
+  execFileSync(process.execPath, [path.join(REGISTRY_DIR, 'lib', 'test-profiles.js')], {
+    cwd: REGISTRY_DIR, encoding: 'utf8', timeout: 30000
+  });
+  check('profile module tests all pass', true);
+} catch (e) {
+  check('profile module tests all pass', false, (e.stdout || '').toString().split('\n').pop());
+}
+
 // ── Agent Install ───────────────────────────────────────────
 
 console.log('\n--- Agent Installation ---');
@@ -541,6 +553,30 @@ console.log('\n--- Update Picks Up Criteria Changes ---');
   check('after update has v2 criteria', fs.readFileSync(dst, 'utf8').includes('Version two updated.'));
   check('after update v1 criteria gone', !fs.readFileSync(dst, 'utf8').includes('Version one.'));
   rmrf(reg); rmrf(home);
+}
+
+// ── List Shows Profiles ───────────────────────────────────
+
+console.log('\n--- List Shows Profiles ---');
+{
+  const reg = tmpDir();
+  fs.mkdirSync(path.join(reg, 'profiles'), { recursive: true });
+  fs.writeFileSync(path.join(reg, 'profiles', 'frontend.md'),
+    '---\nname: frontend\ndescription: React/TS frontend\ndetect-files: [package.json, tsconfig.json]\ndetect-priority: 10\n' +
+    'criteria-feature: [a]\ncriteria-bugfix: [b]\ncriteria-refactor: [c]\n---\n');
+  fs.mkdirSync(path.join(reg, 'agents'), { recursive: true });
+  copyLib(reg);
+  let out = '';
+  try {
+    out = execFileSync(process.execPath, [path.join(reg, 'bin', 'cli.js'), 'list'], {
+      cwd: reg, encoding: 'utf8', timeout: 30000
+    });
+  } catch (e) { out = (e.stdout || '').toString(); }
+  check('list shows profiles section', /profiles/i.test(out));
+  check('list shows frontend profile', out.includes('frontend'));
+  check('list shows detect files', out.includes('package.json'));
+  check('list shows profile description', out.includes('React/TS frontend'));
+  rmrf(reg);
 }
 
 // ── Summary ─────────────────────────────────────────────────
