@@ -138,6 +138,7 @@ You receive a PR number or URL. Use `gh` to fetch all context you need.
      "pr": 123,
      "issues": [
        {"severity": "must-fix", "file": "src/app.js", "line": 42, "message": "Unhandled promise rejection at API boundary"},
+       {"severity": "must-fix", "file": "src/components/Drawer.tsx", "line": 15, "message": "Container width 620px does not match Figma (890px)", "category": "design"},
        {"severity": "suggestion", "file": "src/utils.js", "line": 10, "message": "Consider extracting this into a named function"}
      ],
      "criteria_results": [
