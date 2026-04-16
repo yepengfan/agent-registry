@@ -187,3 +187,4 @@ Include:
 4. Always post a round summary comment after each round
 5. Always post a final summary comment when the required consecutive clean runs are achieved
 6. If a round finds must-fix issues, reset the consecutive clean counter to 0
+7. NEVER instruct the reviewer to skip posting inline comments — PR comments are the authoritative record of issues and the reference for the fixer
