@@ -47,38 +47,78 @@ You receive a PR number or URL. Use `gh` to fetch all context you need.
 
    **Prerequisite:** The frontend dev server must be running locally. Do not start or stop it yourself.
 
-   a. Check if the repo has SDD steering files:
-      ```bash
-      ls .sdd/steering/feature-*-figma.md 2>/dev/null
-      ```
-      If no files found, skip this step entirely.
+   a. Check if Figma design references exist:
+      - Check for SDD steering files: `ls .sdd/steering/feature-*-figma.md 2>/dev/null`
+      - Check the PR description body for a Figma URL (e.g., `figma.com/design/...`)
+      If neither steering files nor a Figma URL is found, skip this step entirely.
+      If skipping AND `figma-design-match` is in your injected criteria list, emit a `criteria_results` entry with `pass: true` and detail: "No Figma design reference found — criterion not applicable for this PR."
 
-   b. For each steering file found, read it to extract:
-      - Figma file key and node IDs per screen
-      - The localhost route/URL for each screen
-      ```bash
-      cat .sdd/steering/feature-<name>-figma.md
-      ```
+   b. Extract Figma references:
+      - **If steering files found**, read each to extract Figma file key, node IDs, and localhost route per screen:
+        ```bash
+        cat .sdd/steering/feature-<name>-figma.md
+        ```
+      - **If no steering files but a Figma URL exists in the PR description**, extract the file key and node ID from the URL (format: `figma.com/design/:fileKey/:fileName?node-id=:nodeId`). In this case, localhost routes are unknown — use `figma:get_design_context` to understand which screens are represented and match against changed files by component/page name.
 
-   c. Identify which screens are affected by the PR's changed files. Match changed file paths against the screens documented in the steering file.
+   c. Identify which screens are affected by the PR's changed files.
 
-   d. For each affected screen, capture both the design reference and the rendered implementation:
+   **Pass 1 — Rendered Screenshot Comparison (PRIMARY)**
 
-      **Figma design screenshot:**
+   This is the authoritative check. It requires both Figma MCP and Playwright MCP.
+
+   **Note:** Pass 1 (rendered screenshot comparison) requires a known localhost URL for each screen. If only a PR-description Figma URL is available (no steering file with localhost routes), skip Pass 1 and proceed directly to Pass 2 (code + data verification). Report in criteria_results that rendered comparison was not possible due to unknown localhost routes.
+
+   When Pass 1 is skipped due to unknown localhost routes, if `figma-design-match` is in your injected criteria list, set `figma-design-match` to `pass: false` with detail explaining that rendered screenshot comparison was not possible (no localhost URL available) and recommend manual visual QA before merge.
+
+   d. For each affected screen, capture the rendered implementation via Playwright MCP:
+      - Use `browser_navigate` to load the page URL on localhost
+      - Wait for content to render (use `browser_wait_for` if needed)
+      - Take a screenshot via `browser_take_screenshot`
+
+   e. Fetch the Figma reference screenshot:
       ```
       figma:get_screenshot(fileKey="<key>", nodeId="<nodeId>")
       ```
 
-      **Rendered implementation screenshot** (via Playwright MCP):
-      Navigate to the screen's localhost URL and capture a screenshot of the rendered page.
+   f. Compare the TWO SCREENSHOTS visually — rendered UI vs Figma design:
+      - **Layout**: Is the visual structure the same? Element order, alignment, grouping?
+      - **Dimensions**: Do containers, inputs, columns look the same width/height?
+      - **Typography**: Does the text look the same size, weight, color?
+      - **Buttons**: Are they in the same positions? Same grouping (left vs right)?
+      - **States**: Do disabled/active/hover states look correct?
+      - **Content**: Does the TEXT CONTENT match? (Not just "a string is there" — the ACTUAL WORDS)
+      - **Icons**: Are all icons present where Figma shows them?
+      - **Empty states**: How does the UI look with no data vs with data?
 
-   e. Compare the Figma screenshot against the rendered screenshot side-by-side. Check every item in the "Design Fidelity" section of `ref/review-checklist.md`. This is a visual comparison — rendered UI vs Figma design, not code reading.
+   **Pass 2 — Code + Data Verification (SUPPLEMENTARY)**
 
-   f. For each mismatch found, classify severity:
-      - **must-fix**: Wrong layout structure, missing elements, wrong container dimensions, elements in wrong position, wrong component used
-      - **suggestion**: Minor spacing token refinements, polish items, small alignment tweaks
+   After visual comparison, verify implementation details:
 
-   g. Add all design mismatches to your issues array with `"category": "design"` to distinguish them from code quality issues. Include what differs, expected (from Figma), and actual (from rendered screenshot).
+   g. **i18n value verification:**
+      - Read the actual string values from fallback.json / en-US.json
+      - Compare each visible text string against what Figma shows
+      - Flag any text that doesn't match EXACTLY
+
+   h. **Runtime data awareness:**
+      - Check API response types — what shape does real data have?
+      - Will the data fit within the designed column widths?
+      - Are there truncation/overflow handlers for long content?
+
+   i. **DS component state verification:**
+      - For each disabled/loading/error state, verify the DS component actually renders the correct visual style
+      - Don't trust that `disabled` prop = grey appearance — verify it
+
+   **Fallback — When Playwright Can't Access the Page:**
+
+   If Playwright cannot access the page (auth issues, feature flags, etc.):
+   1. Report in criteria_results: "Playwright could not access page: [reason]"
+   2. Fall back to Pass 2 only (code + data verification)
+   3. If `figma-design-match` is in your injected criteria list, set figma-design-match to `pass: false` with detail explaining the limitation
+   4. Recommend manual visual verification before merge
+
+   j. For each mismatch found, classify severity per the Design Severity rules below.
+
+   k. Add all design mismatches to your issues array with `"category": "design"`. Include what differs, expected (from Figma), and actual (from rendered screenshot or code).
 
 5. **Analyze every change** against the review checklist and coding conventions in your `ref/` docs.
 
@@ -98,6 +138,7 @@ You receive a PR number or URL. Use `gh` to fetch all context you need.
      "pr": 123,
      "issues": [
        {"severity": "must-fix", "file": "src/app.js", "line": 42, "message": "Unhandled promise rejection at API boundary"},
+       {"severity": "must-fix", "file": "src/components/Drawer.tsx", "line": 15, "message": "Container width 620px does not match Figma (890px)", "category": "design"},
        {"severity": "suggestion", "file": "src/utils.js", "line": 10, "message": "Consider extracting this into a named function"}
      ],
      "criteria_results": [
@@ -114,10 +155,21 @@ You receive a PR number or URL. Use `gh` to fetch all context you need.
 
 ### Design-Specific Severity
 
-When a Figma steering file is present, design mismatches follow these severity rules. Design must-fix issues are treated as regular must-fix issues and count toward the `must_fix_count` for the `zero-must-fix-issues` criterion gate.
+Design must-fix issues are treated as regular must-fix issues and count toward the `must_fix_count` for the `zero-must-fix-issues` criterion gate.
 
-- **must-fix**: Wrong layout structure (flex direction, element order), missing UI elements, wrong container dimensions (width/height off by more than cosmetic), elements positioned incorrectly, wrong design system component used
-- **suggestion**: Minor spacing differences (within ~4px), token refinement opportunities, polish items that don't affect usability or layout
+**Severity Escalation:** If the orchestrator includes a "Prior Round Suggestions" section in your dispatch prompt listing design suggestions from previous rounds, any suggestion that has appeared in 3+ prior rounds MUST be escalated to "must-fix" in the current round. Persistent suggestions indicate the fix is being deprioritized but the mismatch remains.
+
+**Always must-fix (never suggestion):**
+- Text content doesn't match Figma (i18n value mismatch)
+- Element is present in Figma but missing in implementation
+- Element is in wrong position (wrong section, wrong side)
+- Container dimensions are visibly wrong in rendered screenshot
+- DS component renders a different visual state than Figma shows
+
+**Suggestion only:**
+- Minor spacing differences (within ~4px) that don't affect layout
+- Token refinement opportunities where the visual result is close
+- Polish items that don't affect usability
 
 ## Domain Knowledge
 

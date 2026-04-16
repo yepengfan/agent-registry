@@ -3,7 +3,7 @@
 ## Workflow Diagram
 
 ```
-User: /pr-orchestrator <PR> [--verify]
+User: /pr-orchestrator <PR> [--rounds N]    (default N=3)
          |
          v
   ORCHESTRATOR (Opus)
@@ -12,35 +12,37 @@ User: /pr-orchestrator <PR> [--verify]
   3. Detect task type (branch/title)
   4. Detect repo profile (file detection)
   5. Resolve criteria (profile + task type + overrides)
+  6. Initialize: consecutive_clean=0, round=0
          |
          v
-  REVIEWER (Sonnet) — Agent tool, model: "sonnet"
-  - Fetch diff + context
-  - Analyze code
-  - Post GH comments
-  - Evaluate criteria
-  - Return JSON
+  ┌─────────────────────────────────────────┐
+  │  REVIEW-FIX LOOP                        │
+  │                                         │
+  │  REVIEWER (Sonnet) — Agent tool         │
+  │  - Fetch diff + context                 │
+  │  - Analyze code + Figma verification    │
+  │  - Post GH comments                     │
+  │  - Evaluate criteria                    │
+  │  - Return JSON                          │
+  │         |                               │
+  │         v                               │
+  │  Any must-fix? ──no──> consecutive_clean++ │
+  │         |                  |             │
+  │        yes          consecutive_clean    │
+  │         |            >= N? ──yes──> EXIT │
+  │         v                  |             │
+  │  consecutive_clean=0       no            │
+  │         |                  |             │
+  │  FIXER (Sonnet)            |             │
+  │  - Fix must-fix only       |             │
+  │  - Commit + push           |             │
+  │         |                  |             │
+  │         v                  v             │
+  │  Post round summary, loop back ─────────│
+  └─────────────────────────────────────────┘
          |
          v
-  Any gate failing? --no--> Post clean summary, exit
-         |
-        yes
-         v
-  FIXER (Sonnet) — Agent tool, model: "sonnet"
-  - Checkout branch
-  - Fix must-fix only
-  - Commit + push
-  - Return JSON
-         |
-         v
-  --verify? --no--> Post summary, exit
-         |
-        yes
-         v
-  REVIEWER (Sonnet) — re-review fixes
-         |
-         v
-  Post final summary, exit (no more loops)
+  Post final summary with all rounds table
 ```
 
 ## JSON Contracts
@@ -52,9 +54,13 @@ User: /pr-orchestrator <PR> [--verify]
   "pr": 123,
   "issues": [
     {"severity": "must-fix", "file": "src/app.js", "line": 42, "message": "..."},
+    {"severity": "must-fix", "file": "src/components/Drawer.tsx", "line": 15, "message": "Container width 620px does not match Figma (890px)", "category": "design"},
     {"severity": "suggestion", "file": "src/utils.js", "line": 10, "message": "..."}
   ],
-  "summary": "Found 1 must-fix issue and 1 suggestion."
+  "criteria_results": [
+    {"criterion": "<name>", "gate": true, "pass": true, "metric": "<key>", "value": "<measured>", "detail": "<explanation>"}
+  ],
+  "summary": "Found N issues. Criteria: X/Y gates passing."
 }
 ```
 
@@ -76,7 +82,7 @@ User: /pr-orchestrator <PR> [--verify]
 | `gh auth` fails | Report error, exit |
 | PR not found / closed | Report, exit |
 | Reviewer returns no JSON | Report raw output, exit |
-| Reviewer finds 0 must-fix | Post clean summary, exit |
-| Fixer partially succeeds | Report fixed + unfixed |
+| Reviewer finds 0 must-fix | Increment consecutive_clean, loop or exit |
+| Fixer partially succeeds | Report fixed + unfixed, next round catches remainder |
 | Sub-agent timeout | Report partial results |
-| Verify finds new issues | Report in summary, do NOT fix again |
+| Consecutive clean runs reached | Post final summary, exit |

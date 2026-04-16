@@ -25,7 +25,7 @@
 
 ## Design Fidelity (when `.sdd/steering/feature-*-figma.md` exists)
 
-Skip this section if no `.sdd/steering/feature-*-figma.md` files are found in the repo.
+Skip this section if no `.sdd/steering/feature-*-figma.md` files are found in the repo AND no Figma URL is present in the PR description.
 
 ### Structural Checks
 - [ ] Does the layout structure match Figma? (element order, flex direction, alignment)
@@ -56,3 +56,23 @@ Flag these specifically — they are the most frequently missed issues:
 5. **Conditional elements on wrong view** — e.g., Reset button on list view when Figma shows it only on form view
 6. **Component style mismatch** — colored background when Figma shows bordered card
 7. **Spacing tokens wrong** — gap-md when Figma specifies a different gap value
+
+### Rendered Output Checks (requires Playwright)
+- [ ] Does the RENDERED page match the Figma screenshot? (visual comparison, not code reading)
+- [ ] Does all visible text CONTENT match Figma? (read actual i18n values, not just check keys exist)
+- [ ] Do disabled/active button states render with correct visual style?
+- [ ] Does real API data fit within designed column widths?
+- [ ] Are all icons from Figma visible in the rendered output?
+
+### i18n Text Verification
+- [ ] Read each i18n key's VALUE from fallback.json / en-US.json
+- [ ] Compare each value against the text shown in the Figma screenshot
+- [ ] Flag any text that doesn't match word-for-word
+
+### Most Frequently Missed in Visual Review
+
+8. **i18n text mismatch** — Key exists but value is wrong (different wording than Figma)
+9. **Data overflow** — Column/container looks right with placeholder data but breaks with real API data (UUIDs, long names)
+10. **DS component state gap** — `disabled` prop doesn't produce the same visual as Figma's disabled state
+11. **CSS specificity override** — Tailwind class is correct but DS component's internal styles override it
+12. **Persistent suggestion decay** — Issue flagged as suggestion 3+ times means it should be must-fix
