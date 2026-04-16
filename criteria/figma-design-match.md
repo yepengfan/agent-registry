@@ -19,9 +19,9 @@ If either MCP is unavailable, report `pass: false` with detail: `"<tool> MCP not
 
 ### Evaluation Workflow
 
-1. **Check applicability:** Read the Figma steering file (`.sdd/steering/feature-*-figma.md`) or extract a Figma URL from the PR description.
+1. **Check applicability:** List all files in `.sdd/steering/` and find any file whose name contains `figma` (case-insensitive). Use `ls .sdd/steering/ 2>/dev/null | grep -i figma` rather than a case-sensitive glob. If a matching file exists, read it to extract the Figma file key and node IDs. Also check for a Figma URL in the PR description.
 
-   If no steering file exists AND no Figma URL is found in the PR description, report `pass: true` with detail: `"No Figma design reference found — criterion not applicable for this PR."`
+   If no steering file matches AND no Figma URL is found in the PR description, report `pass: true` with detail: `"No Figma design reference found — criterion not applicable for this PR."`
 
 2. **Check prerequisites:** Both Figma MCP and Playwright MCP must be available.
    - If Figma MCP is missing: report `pass: false` with detail `"Figma MCP not available — cannot perform automated verification"`

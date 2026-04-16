@@ -52,7 +52,7 @@ You receive a PR number or URL. Use `gh` to fetch all context you need.
    **Prerequisite:** The frontend dev server must be running locally. Do not start or stop it yourself.
 
    a. Check if Figma design references exist:
-      - Check for SDD steering files: `ls .sdd/steering/feature-*-figma.md 2>/dev/null`
+      - Check for SDD steering files: `ls .sdd/steering/ 2>/dev/null | grep -i figma`
       - Check the PR description body for a Figma URL (e.g., `figma.com/design/...`)
       If neither steering files nor a Figma URL is found, skip this step entirely.
       If skipping AND `figma-design-match` is in your injected criteria list, emit a `criteria_results` entry with `pass: true` and detail: "No Figma design reference found — criterion not applicable for this PR."

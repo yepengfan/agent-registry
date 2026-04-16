@@ -102,6 +102,24 @@ gh pr view <PR> --json number,title,body,baseRefName,headRefName,state
 ```
 Verify the PR exists and is open.
 
+### Step 2b: Pre-read Figma Steering Context
+
+Before entering the review loop, check for Figma steering files and pre-read their content:
+
+1. List `.sdd/steering/` in the repo and find any file matching `*figma*` (case-insensitive):
+   ```bash
+   ls .sdd/steering/ 2>/dev/null | grep -i figma
+   ```
+2. If found, read the file contents (file key, node IDs, screen details, Playwright steps)
+3. When dispatching the reviewer, include the full steering file content in the prompt under a `## Figma Steering Context` section
+4. This prevents the reviewer from needing to discover the file itself — eliminating glob/case-sensitivity failures
+
+If no steering file is found and no Figma URL exists in the PR description body, include:
+```
+## Figma Steering Context
+No Figma design reference found — figma-design-match criterion is not applicable.
+```
+
 ### Step 3: Review-Fix Loop
 
 The orchestrator runs a review-fix loop until the required number of consecutive clean runs is reached (default: 3, configurable via `--rounds N`).
@@ -133,7 +151,7 @@ If `round >= max_rounds`:
 - Exit the loop
 
 1. **Dispatch the Reviewer**
-   - Call `Agent(description: "PR #<number> Review Round <round>", subagent_type: "pr-reviewer", prompt: "Review PR #<number> in this repository." + <resolved criteria context> + <prior round suggestions if any>)`
+   - Call `Agent(description: "PR #<number> Review Round <round>", subagent_type: "pr-reviewer", prompt: "Review PR #<number> in this repository." + <resolved criteria context> + <Figma steering context from Step 2b> + <prior round suggestions if any>)`
    - If `subagent_type` dispatch fails (agent definition not found), fall back to reading the body of `{registry_root}/agents/pr-reviewer/agent.md` and passing it inline via the `prompt` parameter
    - Wait for completion and capture the JSON response
    - Increment `round`
