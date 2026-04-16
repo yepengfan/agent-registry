@@ -12,8 +12,8 @@ UI implementation must match the linked Figma design specification.
 
 ### Prerequisites
 - Figma MCP server must be available in the session
-- Playwright MCP server must be available for capturing screenshots
-- If either is missing, report `pass: false` with detail: "Required MCP server not available"
+- Playwright MCP server should be available for rendered screenshot comparison
+- See Evaluation Workflow step 1 for specific fallback behavior when either is unavailable
 
 ### Evaluation Workflow
 

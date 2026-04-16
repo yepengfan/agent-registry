@@ -56,7 +56,10 @@ User: /pr-orchestrator <PR> [--rounds N]    (default N=3)
     {"severity": "must-fix", "file": "src/app.js", "line": 42, "message": "..."},
     {"severity": "suggestion", "file": "src/utils.js", "line": 10, "message": "..."}
   ],
-  "summary": "Found 1 must-fix issue and 1 suggestion."
+  "criteria_results": [
+    {"criterion": "<name>", "gate": true, "pass": true, "metric": "<key>", "value": "<measured>", "detail": "<explanation>"}
+  ],
+  "summary": "Found N issues. Criteria: X/Y gates passing."
 }
 ```
 

@@ -114,8 +114,14 @@ The orchestrator runs a review-fix loop until the required number of consecutive
 - `consecutive_clean = 0`
 - `round = 0`
 - `required_clean = N` (from `--rounds` flag, default 3)
+- `max_rounds = required_clean * 3` (safety cap — default 9)
 
 **Loop:** (repeat until `consecutive_clean >= required_clean`)
+
+If `round >= max_rounds`:
+- Post a summary comment reporting that the maximum round limit was reached
+- Report all unresolved issues from the last round
+- Exit the loop
 
 1. **Dispatch the Reviewer**
    - Read the body of `agents/pr-reviewer/agent.md` (everything after frontmatter)
@@ -165,7 +171,7 @@ Include:
 
 - `gh auth` fails → report error, exit (no sub-agent spawn)
 - PR not found / closed → report and exit
-- Reviewer finds no issues → post clean summary, exit
+- Reviewer finds no issues → increment consecutive_clean, continue loop or exit if target reached
 - Fixer can't fix an issue → report as unfixed in summary
 - Sub-agent timeout → report partial results
 
