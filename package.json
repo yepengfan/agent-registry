@@ -1,6 +1,6 @@
 {
   "name": "@yepengfan/agent-registry",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "A unified registry for Claude Code agents and skills",
   "license": "MIT",
   "author": "Yepeng Fan",
