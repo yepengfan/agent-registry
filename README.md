@@ -26,9 +26,13 @@ agent-registry/
   profiles/
     <name>.md           # Repo type → task type → criteria mappings
   skills/
-    <skill-name>/
+    <command-skill>/
       commands/         # Slash commands -> ~/.claude/commands/<skill>/
       ref/              # Development reference (not installed)
+    <procedure-skill>/
+      SKILL.md          # Procedure prompt -> ~/.claude/skills/<skill>/
+      scripts/          # Deterministic helper scripts
+      schemas/          # JSON schemas for agent contracts
   bin/
     cli.js              # npx entry point
   lib/
@@ -48,12 +52,12 @@ agent-registry/
 | [devops](agents/devops/) | agent | — | — | Infrastructure and deployment specialist | — | — | — | docker, kubectl, terraform |
 | [pr-reviewer](agents/pr-reviewer/) | agent | sonnet | blue | Reviews PR diffs for code quality and Figma design verification (two-pass: rendered screenshot + code) | — | zero-must-fix-issues, all-tests-pass | evidence-based-claims | gh, figma_mcp, playwright |
 | [pr-fixer](agents/pr-fixer/) | agent | sonnet | orange | Fixes must-fix review issues on PR branches | — | — | verification-gate, evidence-based-claims, no-blind-trust, safe-revert-on-failure, structured-pushback | gh |
-| [pr-orchestrator](agents/pr-orchestrator/) | orchestrator | opus | purple | Review-fix loop until N consecutive clean runs (default 3). Auto-detects current branch PR. `--rounds N` configurable. | — | — | evidence-based-claims, independent-output-verification | gh |
 
 ## Available Skills
 
 | Skill | Description |
 |-------|-------------|
+| [pr-review-loop](skills/pr-review-loop/) | Deterministic review-fix loop with grounding verification (requires pr-reviewer and pr-fixer agents) |
 | [slides](skills/slides/) | CI&T branded slide generation and auditing commands |
 
 ## Available Behaviors
@@ -346,6 +350,20 @@ Behaviors are injected between `<!-- behaviors:start -->` and `<!-- behaviors:en
 
 ## Adding a New Skill
 
+There are two skill types:
+
+### Command skill (slash commands)
+
 1. Create `skills/<name>/commands/` with `.md` command files
 2. Add a `README.md` describing the skill
 3. Run `npx @yepengfan/agent-registry install --skill <name>` to install
+
+Installs by symlinking `commands/` into `~/.claude/commands/<name>`.
+
+### Procedure skill (SKILL.md)
+
+1. Create `skills/<name>/SKILL.md` with the procedure prompt
+2. Add `scripts/` for deterministic helpers and `schemas/` for contracts as needed
+3. Run `npx @yepengfan/agent-registry install --skill <name>` to install
+
+Installs by symlinking the entire skill directory into `~/.claude/skills/<name>`. Procedure skills are invoked by main Claude following the steps in SKILL.md, rather than as slash commands.
