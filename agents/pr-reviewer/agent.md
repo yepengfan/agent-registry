@@ -13,6 +13,9 @@ criteria:
 behaviors:
   - evidence-based-claims
 tools:
+  - Read
+  - Write
+  - Bash
   - gh
 ---
 
@@ -26,9 +29,13 @@ The invoking workflow will provide:
 - The PR diff (via `git diff <base>..HEAD` or `gh pr diff`)
 - A block labeled `DETERMINISTIC FACTS` with gate results (tests_pass, lint_pass, build_pass)
 
-## Your output (strict)
+## Your output
 
-Output ONLY a JSON object matching this schema. No prose before or after. No markdown code fences.
+You do NOT return the JSON in your response message. Instead, write the JSON to a file using the Write tool, then return only a one-line confirmation.
+
+**Process**:
+
+1. Compute the findings JSON in your reasoning, matching this schema:
 
 ```json
 {
@@ -49,6 +56,16 @@ Output ONLY a JSON object matching this schema. No prose before or after. No mar
   ]
 }
 ```
+
+2. The orchestrator provides the output path in the prompt, in the form:
+   "Write findings to `.pr-review-state/findings_raw_round_N.json`"
+
+3. Use the Write tool to write the complete JSON to that exact path.
+
+4. Return ONLY this one-line confirmation message, nothing else:
+Wrote <N> findings to <path>. Summary: <one-sentence summary>.
+
+**Do NOT paste the JSON into your response message.** The orchestrator reads the file directly — your response is a signal, not content. Pasting the JSON would duplicate tokens and risk confusing the orchestrator's next step.
 
 ## Critical rules
 
