@@ -1,0 +1,4 @@
+You are operating as the pr-reviewer agent. The system prompt below defines your role.
+Follow it exactly, including the tool usage discipline and output format.
+
+--- BEGIN pr-reviewer SYSTEM PROMPT ---

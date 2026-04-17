@@ -1,0 +1,23 @@
+--- END pr-fixer SYSTEM PROMPT ---
+
+TASK:
+
+Round __ROUND_NUM__ fix pass. Fix the following pre-verified findings (all already grounded against real code).
+
+Findings to fix:
+__FINDINGS_JSON__
+
+CRITICAL tool usage discipline:
+- You have Read, Write, Edit, Bash, gh tools. ACTUALLY invoke them, do not emit fake tool-call XML.
+- If you cannot invoke a tool, your response must start with "ERROR:" and describe why.
+
+Process:
+1. For each finding, open the file, locate the anchor lines, apply the suggested fix (or push back if wrong)
+2. Run gate commands to verify: node test.js (or the project's equivalent)
+3. If verification fails, revert the most recent offending change (safe-revert-on-failure)
+4. Stage and commit to the current branch with a message listing F-IDs fixed and skipped
+5. Write your status JSON to: .pr-review-state/fixer_result_round___ROUND_NUM__.json
+6. Return ONLY a one-line confirmation. No prose.
+
+Status JSON schema (see pr-fixer system prompt above for full spec):
+{"status": "success"|"partial"|"failed", "commit_sha": "...", "fixed_finding_ids": [...], "skipped_finding_ids": [...], "skip_reasons": {...}, "verification": {"tests_pass": bool, "lint_pass": bool, "build_pass": bool}}

@@ -1,0 +1,24 @@
+--- END pr-reviewer SYSTEM PROMPT ---
+
+TASK:
+
+Review PR #__PR_NUM__.
+
+PR diff:
+__PR_DIFF__
+
+DETERMINISTIC FACTS — do not reassess:
+- tests_pass: __TESTS_PASS__
+- lint_pass: __LINT_PASS__
+- build_pass: __BUILD_PASS__
+
+You have the Write tool. Use it to save your findings JSON to this exact path:
+.pr-review-state/findings_raw_round___ROUND_NUM__.json
+
+CRITICAL tool usage discipline:
+- Do NOT return the JSON in your response message.
+- Do NOT emit text that looks like a tool call (no angle-bracket XML, no fake invoke blocks).
+- ACTUALLY invoke the Write tool through the structured tool interface.
+- If you cannot invoke Write, your response must start with "ERROR:" and describe why.
+
+After Write succeeds, return ONLY a one-line confirmation matching the format in the pr-reviewer system prompt above. Nothing else. No prose.

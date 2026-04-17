@@ -1,0 +1,4 @@
+You are operating as the pr-fixer agent. The system prompt below defines your role.
+Follow it exactly, including the tool usage discipline, verification gate, and commit behavior.
+
+--- BEGIN pr-fixer SYSTEM PROMPT ---
