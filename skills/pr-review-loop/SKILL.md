@@ -6,6 +6,16 @@ allowed-tools: Task, Bash, Read, Write
 
 # PR Review Loop
 
+## Known limitation: custom subagent tool access
+
+Due to Claude Code issue anthropics/claude-code#12392, custom subagents in ~/.claude/agents/ cannot actually invoke tools — they emit fake tool-call XML as text. Built-in subagents (general-purpose, Explore, Plan) work correctly.
+
+This skill works around that by invoking `subagent_type: "general-purpose"` and injecting the pr-reviewer/pr-fixer role via prompt. The prompt is assembled by `scripts/build_reviewer_prompt.sh` and `scripts/build_fixer_prompt.sh` from template files in `templates/`. All inline prompt text lives in those .txt files — SKILL.md itself does not contain the literal prompt content, to avoid markdown parsing corruption of angle-bracket placeholders and nested code fences.
+
+When issue #12392 is fixed, the workaround can be reverted by:
+1. Changing Steps 2 and 6 back to direct `subagent_type: "pr-reviewer"` / `"pr-fixer"` invocation
+2. Deleting scripts/build_*.sh and templates/
+
 You are orchestrating a review-fix loop on a PR. Drive the loop faithfully. Do not skip steps. Do not substitute your own judgment for the deterministic scripts — they exist specifically to catch LLM judgment errors you can't self-detect.
 
 ## Before starting
@@ -45,31 +55,50 @@ Output goes to `./.pr-review-state/gates.json`. Read it to see the results. Do N
 
 ### 2. Invoke pr-reviewer subagent
 
-Use the Task tool with `subagent_type: "pr-reviewer"`. Construct the prompt as follows:
+Build the Task prompt from templates and invoke general-purpose subagent.
 
-- Start with: "Review PR #{N}." where {N} is the PR number from `gh pr view`.
-- Include the PR diff: get via `gh pr diff` (or `git diff <base>..HEAD` if gh unavailable)
-- Include the gate results from step 1, wrapped clearly:
+Step 2a — Get PR number:
 
-```
-DETERMINISTIC FACTS — do not reassess:
-- tests_pass: <value from gates.json>
-- lint_pass: <value from gates.json>
-- build_pass: <value from gates.json>
+```bash
+PR_NUM=$(gh pr view --json number -q .number)
 ```
 
-Tell the reviewer explicitly and imperatively to use the Write tool. The prompt should include:
+Step 2b — Read gate results to extract pass/fail booleans:
 
-You have the Write tool. Use it to save your findings JSON to:
-.pr-review-state/findings_raw_round_{N}.json
+```bash
+TESTS_PASS=$(jq -r '.tests.pass' .pr-review-state/gates.json)
+LINT_PASS=$(jq -r '.lint.pass' .pr-review-state/gates.json)
+BUILD_PASS=$(jq -r '.build.pass' .pr-review-state/gates.json)
+```
 
-Do NOT return the JSON in your response. Do NOT emit <function_calls> XML or any tool-call-looking text. Actually invoke the Write tool through the tool interface.
+Step 2c — Build the prompt:
 
-After Write succeeds, return only a one-line confirmation matching the format in your agent prompt.
+```bash
+bash skills/pr-review-loop/scripts/build_reviewer_prompt.sh \
+  --round <CURRENT_ROUND> \
+  --pr-num "$PR_NUM" \
+  --tests-pass "$TESTS_PASS" \
+  --lint-pass "$LINT_PASS" \
+  --build-pass "$BUILD_PASS" \
+  > /tmp/reviewer_prompt.txt
+```
 
-The above text block is sent verbatim to pr-reviewer (with {N} replaced by actual round number). This language is redundant with pr-reviewer's agent.md prompt but the redundancy is intentional — reviewers sometimes slip back into "pure LLM mode" if not strongly reminded they're a tool-using agent.
+Replace `<CURRENT_ROUND>` with the actual round number (1, 2, 3...).
 
-The reviewer writes the JSON file itself using the Write tool and returns only a one-line confirmation. You do NOT need to capture and save the reviewer's response content — the file is already on disk. Verify the file exists before proceeding to Step 3.
+Step 2d — Read the assembled prompt and invoke Task:
+
+Read /tmp/reviewer_prompt.txt into a variable, then invoke:
+
+- subagent_type: "general-purpose" (NOT "pr-reviewer" — see Known Limitation at top)
+- prompt: the entire contents of /tmp/reviewer_prompt.txt
+
+Step 2e — Verify reviewer wrote the findings file:
+
+```bash
+ls -la .pr-review-state/findings_raw_round_<CURRENT_ROUND>.json
+```
+
+If the file doesn't exist, the subagent failed to invoke Write. Terminate the loop and report the subagent's text response to the user. Do NOT proceed to Step 3.
 
 ### 3. Ground-verify every finding
 
@@ -117,26 +146,33 @@ Reads exactly one line:
 
 ### 6. Invoke pr-fixer subagent
 
-Only reached if step 5 returned `CONTINUE`. Filter the grounded findings to just `must-fix`:
+Only reached if step 5 returned `CONTINUE` AND there are grounded must-fix findings.
+
+Step 6a — Prepare the findings input file (same jq filter as before):
 
 ```bash
 jq '.findings | map(select(.severity == "must-fix"))' \
-  ./.pr-review-state/findings_grounded_round_N.json \
-  > ./.pr-review-state/fixer_input_round_N.json
+  ./.pr-review-state/findings_grounded_round_<N>.json \
+  > ./.pr-review-state/fixer_input_round_<N>.json
 ```
 
 If the filtered array is empty but `CONTINUE` was returned, something is off — go to step 7 anyway to record the round but don't invoke fixer.
 
-If non-empty, use the Task tool with `subagent_type: "pr-fixer"`. The prompt:
+Step 6b — Build the fixer prompt:
 
+```bash
+bash skills/pr-review-loop/scripts/build_fixer_prompt.sh \
+  --round <CURRENT_ROUND> \
+  --findings-file ./.pr-review-state/fixer_input_round_<CURRENT_ROUND>.json \
+  > /tmp/fixer_prompt.txt
 ```
-Fix the following verified findings. Each has been ground-verified against real code.
-After applying fixes, run tests/lint/build to verify, and commit to the current branch.
 
-<paste contents of fixer_input_round_N.json>
-```
+Step 6c — Invoke Task:
 
-Capture the fixer's status JSON and save to `./.pr-review-state/fixer_result_round_N.json`.
+- subagent_type: "general-purpose" (NOT "pr-fixer" — see Known Limitation)
+- prompt: the entire contents of /tmp/fixer_prompt.txt
+
+Step 6d — Read the fixer's status output. The fixer writes its status JSON to `.pr-review-state/fixer_result_round_<N>.json`. Read that file to determine outcome.
 
 ### 7. Loop back to step 1
 
