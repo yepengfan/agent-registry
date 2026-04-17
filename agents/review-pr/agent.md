@@ -165,55 +165,57 @@ If `round >= max_rounds`:
 - Report all unresolved issues from the last round
 - Exit the loop
 
-1. **Compute file batches and pre-fetch diffs**
+1. **Prepare review context** (once per review cycle, not per round)
+
+   a. Read `ref/coding-conventions.md` and extract a 5-10 line summary of key rules.
+   b. Build the `## Focus` block that will be injected into every reviewer prompt:
+      ```
+      ## Focus
+      - Bugs, security vulnerabilities, broken error handling, breaking API changes
+      - <5-10 lines of project conventions from step a>
+      - <prior round suggestions if any>
+      ```
+
+2. **Compute file batches and pre-fetch diffs**
 
    a. Get per-file diff sizes:
       ```bash
       BASE=$(git merge-base main HEAD)
       git diff $BASE HEAD --numstat
       ```
-      This outputs `<insertions>\t<deletions>\t<filepath>` per file. Sum insertions + deletions per file.
-      Do NOT use `gh pr diff --stat` — it is not a valid flag.
+      Sum insertions + deletions per file. Do NOT use `gh pr diff --stat` — not a valid flag.
 
    b. **Batch files** targeting ≤ 500 diff lines per batch:
       - Sort files by diff size descending
       - Greedily assign to batches (each ≤ 500 lines)
       - If a single file exceeds 500 lines, it gets its own batch
-      - The last batch is the designated **test runner**
-      - If total diff ≤ 500 lines, create one batch (also the test runner)
+      - If total diff ≤ 500 lines, create one batch
 
    c. **Pre-fetch diffs** for each batch:
       ```bash
       git diff $BASE HEAD -- <file1> <file2> <file3>
       ```
-      Capture the diff text — this will be passed directly to the reviewer. Sub-agents must NOT run git or gh commands to fetch diffs.
+      Capture the diff text — this will be embedded directly in the reviewer's prompt.
 
-2. **Dispatch all reviewers in parallel**
+3. **Dispatch all reviewers in parallel**
 
-   **Code reviewers** (one per batch):
+   **Code reviewers** (one per batch) — minimal prompt, diff embedded:
    ```
    Agent(
      description: "PR #<N> Code Review Batch <B>/<total>",
      subagent_type: "pr-code",
-     prompt: "Review PR #<N>.
-
+     prompt: "
    ## Assigned Files
    <file list with diff line counts>
 
    ## Diff
-   The diff is provided below. Do NOT run gh or git diff commands.
-   ```diff
-   <pre-fetched diff text>
-   ```
+   <pre-fetched diff text — embedded directly, NOT a file path>
 
-   ## Test Runner
-   <YES | NO>
-
-   <criteria context>
-   <prior round suggestions>"
+   ## Focus
+   <focus block from step 1b>"
    )
    ```
-   If `subagent_type` dispatch fails, fall back to reading `{registry_root}/agents/pr-code/agent.md` inline.
+   If `subagent_type` dispatch fails, fall back to reading `{registry_root}/agents/pr-code/agent.md` and passing inline.
 
    **Design reviewer** (only if `design_review_needed` is true):
    ```
@@ -231,17 +233,16 @@ If `round >= max_rounds`:
 
    All reviewers dispatched in parallel — they are independent.
 
-3. **Merge results**
-   - Wait for all reviewers to complete
-   - Concatenate all `issues` arrays, deduplicate by `file` + `line` + `message`
-   - Merge `criteria_results`: `all-tests-pass` from the test runner batch, `zero-must-fix-issues` recomputed from merged issues, `figma-design-match` from design reviewer
-   - **Cache Figma inventories:** if the design reviewer returned `cached_figma_inventories`, store for subsequent rounds
-   - Increment `round`
+4. **Merge and evaluate results**
 
-4. **Evaluate Results**
-   - Parse each reviewer's JSON output. Check `criteria_results`.
-   - Extract all entries where `gate: true` and `pass: false`
-   - Advisory criteria (`gate: false`) are reported but never block.
+   a. Wait for all reviewers to complete.
+   b. Concatenate all `issues` arrays. Deduplicate by `file` + `line` + `message`.
+   c. **Orchestrator evaluates criteria** (sub-agents do NOT evaluate criteria):
+      - `zero-must-fix-issues`: count issues where `severity === "must-fix"`. Pass if count === 0.
+      - `all-tests-pass`: run `node test.js` independently. Pass if 0 failures.
+      - `figma-design-match`: from design reviewer output (if dispatched).
+   d. **Cache Figma inventories** if design reviewer returned them.
+   e. Increment `round`.
 
 5. **If zero must-fix issues (clean run):**
    - Increment `consecutive_clean`
