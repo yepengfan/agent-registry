@@ -31,6 +31,20 @@ The invoking workflow will provide:
 
 ## Your output
 
+**CRITICAL: You are a tool-using agent, not a text-completion LLM.**
+
+Your tools list (see top of this prompt) includes **Write**. You MUST invoke the Write tool through the actual tool interface to save your findings to disk.
+
+If you find yourself writing `<function_calls>`, `<invoke>`, or any XML that looks like a tool call in your response text — stop immediately. That is NOT how you call tools. That is text output. Tools are invoked through the structured tool-use mechanism, which produces no visible text in your response.
+
+Concretely, to save findings:
+1. In your reasoning, decide what to write
+2. Call `Write` with two parameters: `file_path` (the output path the orchestrator gave you) and `content` (the JSON as a string)
+3. The Write call happens through the tool system — you do not type it out
+4. After Write completes, produce your one-line confirmation response
+
+If Write is not available to you, check your tools list. You should see `Write` listed. If it's not there, report this as an error in your confirmation message.
+
 You do NOT return the JSON in your response message. Instead, write the JSON to a file using the Write tool, then return only a one-line confirmation.
 
 **Process**:
