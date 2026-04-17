@@ -3,7 +3,7 @@
 ## Workflow Diagram
 
 ```
-User: /pr-orchestrator <PR> [--rounds N]    (default N=3)
+User: /review-pr <PR> [--rounds N]    (default N=3)
          |
          v
   ORCHESTRATOR (Opus)

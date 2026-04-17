@@ -1,5 +1,5 @@
 ---
-name: pr-orchestrator
+name: review-pr
 description: Orchestrates PR review and fix workflow
 version: 1.0.0
 author: Yepeng Fan
@@ -8,8 +8,9 @@ model: opus
 color: purple
 tags: [pr-workflow, code-quality]
 subagents:
-  - pr-reviewer
-  - pr-fixer
+  - pr-code
+  - pr-design
+  - pr-fix
 tools:
   - gh
 behaviors:
@@ -26,14 +27,16 @@ You are a PR review orchestrator. You coordinate a review-and-fix workflow by di
 
 Your agent file contains a registry path comment at the top:
 ```
-<!-- agent-registry-path: /path/to/agent-registry/agents/pr-orchestrator -->
+<!-- agent-registry-path: /path/to/agent-registry/agents/review-pr -->
 ```
 
 Extract the registry root (two directories up) to locate criteria and profile definitions:
 - Criteria: `{registry_root}/criteria/{name}.md`
 - Profiles: `{registry_root}/profiles/*.md`
 
-Sub-agents (pr-reviewer, pr-fixer) are dispatched via `subagent_type` — their definitions are loaded automatically by Claude Code from `.claude/agents/`.
+Sub-agents (pr-code, pr-design, pr-fix) are dispatched via `subagent_type` — their definitions are loaded automatically by Claude Code from `.claude/agents/`.
+
+**Architectural constraint:** Claude Code limits agent dispatch to depth-1. Sub-agents cannot spawn further sub-agents. All agent dispatches must happen directly from this orchestrator.
 
 ## Input Parsing
 
@@ -82,7 +85,10 @@ When dispatching the reviewer, include task type and profile context:
 ## Context
 Task type: <detected_type> (detected from: <source>)
 Profile: <profile_name> (detected from: <matched_files>)
+Registry root: <registry_root path>
 ```
+
+The `Registry root` path lets the reviewer locate scripts (`scripts/figma-extract.js`, `scripts/dom-extract.js`, `scripts/design-diff.js`) without needing the `agent-registry root` CLI command.
 
 ## Workflow
 
@@ -102,23 +108,32 @@ gh pr view <PR> --json number,title,body,baseRefName,headRefName,state
 ```
 Verify the PR exists and is open.
 
-### Step 2b: Pre-read Figma Steering Context
+### Step 2b: Check if Design Review is Needed
 
-Before entering the review loop, check for Figma steering files and pre-read their content:
+Determine whether to include design review in coordination:
 
-1. List `.sdd/steering/` in the repo and find any file matching `*figma*` (case-insensitive):
+1. **Check for Figma steering files:**
    ```bash
-   ls .sdd/steering/ 2>/dev/null | grep -i figma
+   ls .sdd/steering/ 2>/dev/null | grep -i 'feature-.*figma'
    ```
-2. If found, read the file contents (file key, node IDs, screen details, Playwright steps)
-3. When dispatching the reviewer, include the full steering file content in the prompt under a `## Figma Steering Context` section
-4. This prevents the reviewer from needing to discover the file itself — eliminating glob/case-sensitivity failures
 
-If no steering file is found and no Figma URL exists in the PR description body, include:
-```
-## Figma Steering Context
-No Figma design reference found — figma-design-match criterion is not applicable.
-```
+2. **Check PR body for Figma URL:** Parse the PR description body (from Step 2) for a Figma URL matching `figma.com/design/:fileKey/:fileName?node-id=:nodeId`.
+
+3. **Set `design_review_needed`:**
+   - If steering files found OR Figma URL found → `design_review_needed = true`
+   - Otherwise → `design_review_needed = false`
+
+4. **If design review is needed**, read ALL matched `feature-*-figma.md` steering files and concatenate their contents. This merged content will be passed to the design reviewer.
+
+### Step 2c: Pre-verify MCP Tool Availability
+
+**Skip this step if `design_review_needed` is false.**
+
+When design review IS needed, probe each required MCP to verify availability. Pass the results to the design reviewer.
+
+1. **Probe Playwright:** Call `mcp__playwright__browser_snapshot`. If it returns, set `playwright_available = true`. If it errors, set `playwright_available = false`.
+
+2. **Probe Figma:** Call `mcp__plugin_figma_figma__whoami`. If it returns user info, set `figma_available = true`. If it errors, set `figma_available = false`.
 
 ### Step 3: Review-Fix Loop
 
@@ -150,31 +165,108 @@ If `round >= max_rounds`:
 - Report all unresolved issues from the last round
 - Exit the loop
 
-1. **Dispatch the Reviewer**
-   - Call `Agent(description: "PR #<number> Review Round <round>", subagent_type: "pr-reviewer", prompt: "Review PR #<number> in this repository." + <resolved criteria context> + <Figma steering context from Step 2b> + <prior round suggestions if any>)`
-   - If `subagent_type` dispatch fails (agent definition not found), fall back to reading the body of `{registry_root}/agents/pr-reviewer/agent.md` and passing it inline via the `prompt` parameter
-   - Wait for completion and capture the JSON response
-   - Increment `round`
+1. **Prepare review context** (once per review cycle, not per round)
 
-2. **Evaluate Results**
-   - Parse the reviewer's JSON output. Check `criteria_results`.
-   - Extract all entries where `gate: true` and `pass: false`
-   - Advisory criteria (`gate: false`) are reported but never block.
+   a. Read `ref/coding-conventions.md` and extract a 5-10 line summary of key rules.
+   b. Build the `## Focus` block that will be injected into every reviewer prompt:
+      ```
+      ## Focus
+      - Bugs, security vulnerabilities, broken error handling, breaking API changes
+      - <5-10 lines of project conventions from step a>
+      - <prior round suggestions if any>
+      ```
 
-3. **If zero must-fix issues (clean run):**
+2. **Compute file batches and pre-fetch diffs**
+
+   a. Get per-file diff sizes:
+      ```bash
+      BASE=$(git merge-base main HEAD)
+      git diff $BASE HEAD --numstat
+      ```
+      Sum insertions + deletions per file. Do NOT use `gh pr diff --stat` — not a valid flag.
+
+   b. **Batch files** targeting ≤ 500 diff lines per batch:
+      - Sort files by diff size descending
+      - Greedily assign to batches (each ≤ 500 lines)
+      - If a single file exceeds 500 lines, it gets its own batch
+      - If total diff ≤ 500 lines, create one batch
+
+   c. **Pre-fetch diffs** for each batch:
+      ```bash
+      git diff $BASE HEAD -- <file1> <file2> <file3>
+      ```
+      Capture the diff text — this will be embedded directly in the reviewer's prompt.
+
+3. **Dispatch all reviewers in parallel**
+
+   **Code reviewers** (one per batch) — minimal prompt, diff embedded:
+   ```
+   Agent(
+     description: "PR #<N> Code Review Batch <B>/<total>",
+     subagent_type: "pr-code",
+     prompt: "
+   ## Assigned Files
+   <file list with diff line counts>
+
+   ## Diff
+   <pre-fetched diff text — embedded directly, NOT a file path>
+
+   ## Focus
+   <focus block from step 1b>"
+   )
+   ```
+   If `subagent_type` dispatch fails, fall back to reading `{registry_root}/agents/pr-code/agent.md` and passing inline.
+
+   **Design reviewer** (only if `design_review_needed` is true):
+   ```
+   Agent(
+     description: "PR #<N> Design Review",
+     subagent_type: "pr-design",
+     prompt: "Verify PR #<N> design fidelity.
+   <figma-design-match criterion>
+   <merged steering context>
+   <MCP availability>
+   <cached Figma inventories if round > 1>"
+   )
+   ```
+   If `subagent_type` dispatch fails, fall back to reading `{registry_root}/agents/pr-design/agent.md` inline.
+
+   All reviewers dispatched in parallel — they are independent.
+
+4. **Merge and evaluate results**
+
+   a. Wait for all reviewers to complete.
+   b. Concatenate all `issues` arrays. Deduplicate by `file` + `line` + `message`.
+   c. **Orchestrator evaluates criteria** (sub-agents do NOT evaluate criteria):
+      - `zero-must-fix-issues`: count issues where `severity === "must-fix"`. Pass if count === 0.
+      - `all-tests-pass`: run `node test.js` independently. Pass if 0 failures.
+      - `figma-design-match`: from design reviewer output (if dispatched).
+   d. **Cache Figma inventories** if design reviewer returned them.
+   e. Increment `round`.
+
+5. **If zero must-fix issues (clean run):**
    - Increment `consecutive_clean`
    - Post a round summary comment on the PR
    - If `consecutive_clean >= required_clean` → exit loop
-   - Otherwise → loop back to step 1 (dispatch reviewer again with fresh eyes)
+   - Otherwise → loop back to step 1 (dispatch reviewers again with fresh eyes)
 
-4. **If must-fix issues found:**
+6. **If must-fix issues found:**
    - Reset `consecutive_clean = 0`
    - **Dispatch the Fixer:**
      - Extract only `must-fix` issues
-     - Call `Agent(description: "PR #<number> Fix Round <round>", subagent_type: "pr-fixer", prompt: <issue list as JSON>)`
-     - If `subagent_type` dispatch fails, fall back to reading the body of `{registry_root}/agents/pr-fixer/agent.md` and passing it inline via the `prompt` parameter
+     - Call `Agent(description: "PR #<number> Fix Round <round>", subagent_type: "pr-fix", prompt: <issue list as JSON>)`
+     - If `subagent_type` dispatch fails (agent not installed), fall back to reading the body of `{registry_root}/agents/pr-fix/agent.md` and passing it inline via the `prompt` parameter
      - Wait for completion and capture the JSON response
-   - **Verify fixes independently** (run test suite, check git log)
+   - **Verify fixes (Principle #4 + #5):**
+     1. Run `git log --oneline -1` — confirm a new commit exists after the fixer ran
+     2. For each fixed issue, grep the target file to confirm the fix was applied
+     3. Run the test suite to confirm no regressions
+     4. **If verification fails** (commit missing or fix not applied):
+        - Log: "Fixer verification failed — retrying as general-purpose agent"
+        - Read the body of `{registry_root}/agents/pr-fix/agent.md`
+        - Re-dispatch as: `Agent(description: "PR #<number> Fix Round <round> (retry)", prompt: <pr-fix agent body> + <issue list as JSON>)`
+        - Verify again after retry
+        - If retry also fails, mark issues as `unfixed` with reason: "fixer commit did not persist after retry"
    - Post a round summary comment on the PR
    - Loop back to step 1 (dispatch reviewer to re-review)
 

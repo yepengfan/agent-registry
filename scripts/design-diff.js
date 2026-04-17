@@ -36,6 +36,17 @@ const TOLERANCES = {
   placeholder: 0,     // exact string
   disabled: 0,        // exact boolean
   borderSides: 0,     // exact match on which sides have borders
+  lineHeight: 2,        // px
+  letterSpacing: 0.5,   // px
+  textAlign: 0,         // exact after normalization
+  textDecoration: 0,    // exact
+  textTransform: 0,     // exact after normalization
+  flexDirection: 0,     // exact after normalization
+  alignItems: 0,        // exact after normalization
+  justifyContent: 0,    // exact after normalization
+  opacity: 0.05,        // numeric
+  boxShadow: 0,         // presence check
+  overflow: 0,          // exact after normalization
 };
 
 // ---------------------------------------------------------------------------
@@ -59,6 +70,41 @@ const FONT_WEIGHT_MAP = {
   'ultrabold': '800',
   'black': '900',
   'heavy': '900',
+};
+
+// Figma layout mode → CSS flex direction
+const FLEX_DIRECTION_MAP = {
+  'HORIZONTAL': 'row',
+  'VERTICAL': 'column',
+};
+
+// Figma alignment → CSS alignment
+const ALIGNMENT_MAP = {
+  'MIN': 'flex-start',
+  'CENTER': 'center',
+  'MAX': 'flex-end',
+  'SPACE_BETWEEN': 'space-between',
+};
+
+// Figma text align → CSS text align
+const TEXT_ALIGN_MAP = {
+  'LEFT': 'left',
+  'CENTER': 'center',
+  'RIGHT': 'right',
+  'JUSTIFIED': 'justify',
+};
+
+// Figma text case → CSS text transform
+const TEXT_CASE_MAP = {
+  'UPPER': 'uppercase',
+  'LOWER': 'lowercase',
+  'TITLE': 'capitalize',
+};
+
+// Figma text decoration → CSS text decoration
+const TEXT_DECORATION_MAP = {
+  'UNDERLINE': 'underline',
+  'STRIKETHROUGH': 'line-through',
 };
 
 // ---------------------------------------------------------------------------
@@ -333,6 +379,86 @@ function diffPair(figma, dom, tokenMap) {
     // DOM border color would need additional extraction — skip if not available
   }
 
+  // Text alignment
+  if (figma.textAlign && dom.textAlign) {
+    const figAlign = TEXT_ALIGN_MAP[figma.textAlign] || figma.textAlign.toLowerCase();
+    check('textAlign', figAlign, dom.textAlign, TOLERANCES.textAlign);
+  }
+
+  // Line height
+  if (figma.lineHeight != null && dom.lineHeight != null) {
+    check('lineHeight', figma.lineHeight, parsePx(dom.lineHeight), TOLERANCES.lineHeight);
+  }
+
+  // Letter spacing
+  if (figma.letterSpacing != null && dom.letterSpacing != null) {
+    check('letterSpacing', figma.letterSpacing, parsePx(dom.letterSpacing), TOLERANCES.letterSpacing);
+  }
+
+  // Text decoration
+  if (figma.textDecoration && dom.textDecoration) {
+    const figDeco = TEXT_DECORATION_MAP[figma.textDecoration] || figma.textDecoration.toLowerCase();
+    check('textDecoration', figDeco, dom.textDecoration, TOLERANCES.textDecoration);
+  }
+
+  // Text transform
+  if (figma.textCase && dom.textTransform) {
+    const figCase = TEXT_CASE_MAP[figma.textCase] || figma.textCase.toLowerCase();
+    check('textTransform', figCase, dom.textTransform, TOLERANCES.textTransform);
+  }
+
+  // Flex direction
+  if (figma.layout && dom.flexDirection) {
+    const figDir = FLEX_DIRECTION_MAP[figma.layout] || figma.layout.toLowerCase();
+    check('flexDirection', figDir, dom.flexDirection, TOLERANCES.flexDirection);
+  }
+
+  // Alignment (main axis)
+  if (figma.primaryAxisAlign && dom.justifyContent) {
+    const figAlign = ALIGNMENT_MAP[figma.primaryAxisAlign] || figma.primaryAxisAlign.toLowerCase();
+    check('justifyContent', figAlign, dom.justifyContent, TOLERANCES.justifyContent);
+  }
+
+  // Alignment (cross axis)
+  if (figma.counterAxisAlign && dom.alignItems) {
+    const figAlign = ALIGNMENT_MAP[figma.counterAxisAlign] || figma.counterAxisAlign.toLowerCase();
+    check('alignItems', figAlign, dom.alignItems, TOLERANCES.alignItems);
+  }
+
+  // Opacity
+  if (figma.opacity != null && dom.opacity != null) {
+    const fOp = typeof figma.opacity === 'number' ? figma.opacity : parseFloat(figma.opacity);
+    const dOp = typeof dom.opacity === 'number' ? dom.opacity : parseFloat(dom.opacity);
+    if (!isNaN(fOp) && !isNaN(dOp) && Math.abs(fOp - dOp) > TOLERANCES.opacity) {
+      mismatches.push({
+        property: 'opacity',
+        figma_value: String(fOp),
+        dom_value: String(dOp),
+      });
+    }
+  }
+
+  // Box shadow (presence check)
+  if (figma.shadows && figma.shadows.length > 0 && !dom.boxShadow) {
+    mismatches.push({
+      property: 'boxShadow',
+      figma_value: 'has shadow',
+      dom_value: 'none',
+    });
+  }
+  if (!figma.shadows && dom.boxShadow) {
+    mismatches.push({
+      property: 'boxShadow',
+      figma_value: 'none',
+      dom_value: 'has shadow',
+    });
+  }
+
+  // Overflow
+  if (figma.overflow && dom.overflow) {
+    check('overflow', figma.overflow, dom.overflow, TOLERANCES.overflow);
+  }
+
   // Disabled state
   if (figma.annotation && /disabled/i.test(figma.annotation) && dom.disabled != null) {
     if (!dom.disabled) {
@@ -400,6 +526,34 @@ function generateFixHint(property, figmaVal, domVal, tokenMap) {
     case 'width':
     case 'height':
       return `Expected ${property} ${figmaVal}, got ${domVal}. Check size constraint or container.`;
+    case 'textAlign':
+      return `Expected text-align ${figmaVal}, got ${domVal}`;
+    case 'lineHeight':
+      return tokenHint
+        ? `Use line-height token "${tokenHint}" (${figmaVal})`
+        : `Expected line-height ${figmaVal}, got ${domVal}`;
+    case 'letterSpacing':
+      return `Expected letter-spacing ${figmaVal}, got ${domVal}`;
+    case 'textDecoration':
+      return `Expected text-decoration ${figmaVal}, got ${domVal}`;
+    case 'textTransform':
+      return `Expected text-transform ${figmaVal}, got ${domVal}`;
+    case 'flexDirection':
+      return `Expected flex-direction ${figmaVal}, got ${domVal}. Check layout orientation.`;
+    case 'justifyContent':
+      return `Expected justify-content ${figmaVal}, got ${domVal}. Check main-axis alignment.`;
+    case 'alignItems':
+      return `Expected align-items ${figmaVal}, got ${domVal}. Check cross-axis alignment.`;
+    case 'opacity':
+      return `Expected opacity ${figmaVal}, got ${domVal}`;
+    case 'boxShadow':
+      return `Shadow mismatch: Figma=${figmaVal}, DOM=${domVal}. Check shadow/elevation token.`;
+    case 'overflow':
+      return `Expected overflow ${figmaVal}, got ${domVal}`;
+    case 'presence':
+      return figmaVal === 'exists'
+        ? `Element exists in Figma but missing in DOM — implement it`
+        : `Element exists in DOM but not in Figma — verify if intentional`;
     default:
       return `Expected ${figmaVal}, got ${domVal}`;
   }
@@ -439,6 +593,44 @@ function compare(figmaInventory, domInventory, tokenMap) {
           : `${dom.tag} (depth ${dom.depth})`,
         match_method: method,
         ...m,
+      });
+    }
+  }
+
+  // Presence mismatches: Figma elements with no DOM match
+  for (const fig of unmatchedFigma) {
+    // Filter noise: only report meaningful unmatched elements
+    const isText = fig.type === 'TEXT' && fig.text;
+    const isComponent = fig.type === 'INSTANCE';
+    const isContainer = fig.backgroundColor || fig.layout;
+    if (isText || isComponent || isContainer) {
+      allMismatches.push({
+        figma_element: `${fig.name} (${fig.type}, ${fig.id})`,
+        dom_element: null,
+        match_method: 'unmatched',
+        property: 'presence',
+        figma_value: 'exists',
+        dom_value: 'missing',
+        fix_hint: `Element "${fig.name}" exists in Figma but has no corresponding DOM element. Implement this element.`,
+      });
+    }
+  }
+
+  // Presence mismatches: DOM elements with no Figma match
+  for (const dom of unmatchedDom) {
+    // Filter noise: only report elements with identifiable content
+    const hasIdentity = dom.text || dom.testId || dom.role || dom.heading;
+    if (hasIdentity) {
+      allMismatches.push({
+        figma_element: null,
+        dom_element: dom.testId
+          ? `${dom.tag}[data-testid="${dom.testId}"]`
+          : `${dom.tag} (depth ${dom.depth})`,
+        match_method: 'unmatched',
+        property: 'presence',
+        figma_value: 'missing',
+        dom_value: 'exists',
+        fix_hint: `Element "${dom.testId || dom.text || dom.tag}" exists in DOM but not in Figma. Verify if intentional (BRD deviation) or remove.`,
       });
     }
   }
@@ -527,7 +719,7 @@ function main() {
 }
 
 // Export for testing; run as CLI when executed directly
-module.exports = { compare, mapElements, diffPair, normalizeColor, normalizeFontWeight, hexToRgb, parsePx, TOLERANCES, FONT_WEIGHT_MAP };
+module.exports = { compare, mapElements, diffPair, normalizeColor, normalizeFontWeight, hexToRgb, parsePx, TOLERANCES, FONT_WEIGHT_MAP, FLEX_DIRECTION_MAP, ALIGNMENT_MAP, TEXT_ALIGN_MAP, TEXT_CASE_MAP, TEXT_DECORATION_MAP };
 
 if (require.main === module) {
   main();

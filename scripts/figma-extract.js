@@ -45,6 +45,20 @@ function extractInventory(rootNode) {
       }
     }
 
+    // Text alignment
+    if (node.type === 'TEXT') {
+      el.textAlign = node.textAlignHorizontal; // 'LEFT','CENTER','RIGHT','JUSTIFIED'
+      if (node.letterSpacing && node.letterSpacing.value !== 0) {
+        el.letterSpacing = node.letterSpacing.value;
+      }
+      if (node.textDecoration && node.textDecoration !== 'NONE') {
+        el.textDecoration = node.textDecoration; // 'UNDERLINE','STRIKETHROUGH'
+      }
+      if (node.textCase && node.textCase !== 'ORIGINAL') {
+        el.textCase = node.textCase; // 'UPPER','LOWER','TITLE'
+      }
+    }
+
     // Layout properties (auto-layout frames)
     if ('layoutMode' in node && node.layoutMode !== 'NONE') {
       el.layout = node.layoutMode;
@@ -55,6 +69,26 @@ function extractInventory(rootNode) {
       el.gap = node.itemSpacing;
     }
 
+    // Auto-layout alignment
+    if ('layoutMode' in node && node.layoutMode !== 'NONE') {
+      el.primaryAxisAlign = node.primaryAxisAlignItems; // 'MIN','CENTER','MAX','SPACE_BETWEEN'
+      el.counterAxisAlign = node.counterAxisAlignItems; // 'MIN','CENTER','MAX'
+      el.primarySizing = node.primaryAxisSizingMode; // 'FIXED','AUTO'
+      el.counterSizing = node.counterAxisSizingMode; // 'FIXED','AUTO'
+    }
+
+    // Sizing mode
+    if ('layoutSizingHorizontal' in node) {
+      el.sizingH = node.layoutSizingHorizontal; // 'FIXED','HUG','FILL'
+      el.sizingV = node.layoutSizingVertical;
+    }
+
+    // Min/max dimensions
+    if (node.minWidth) el.minWidth = node.minWidth;
+    if (node.maxWidth) el.maxWidth = node.maxWidth;
+    if (node.minHeight) el.minHeight = node.minHeight;
+    if (node.maxHeight) el.maxHeight = node.maxHeight;
+
     // Fill (background color)
     if ('fills' in node && node.fills?.length > 0
         && node.fills[0].type === 'SOLID'
@@ -62,6 +96,25 @@ function extractInventory(rootNode) {
       const c = node.fills[0].color;
       el.backgroundColor = rgbToHex(c.r, c.g, c.b);
       el.backgroundOpacity = node.fills[0].opacity ?? 1;
+    }
+
+    // Element-level opacity
+    if ('opacity' in node && node.opacity !== undefined && node.opacity < 1) {
+      el.opacity = node.opacity;
+    }
+
+    // Effects (shadows)
+    if ('effects' in node && node.effects?.length > 0) {
+      const shadows = node.effects.filter(e => e.visible !== false && (e.type === 'DROP_SHADOW' || e.type === 'INNER_SHADOW'));
+      if (shadows.length > 0) {
+        el.shadows = shadows.map(s => ({
+          type: s.type,
+          offsetX: s.offset?.x ?? 0,
+          offsetY: s.offset?.y ?? 0,
+          radius: s.radius ?? 0,
+          color: s.color ? rgbToHex(s.color.r, s.color.g, s.color.b) : null,
+        }));
+      }
     }
 
     // Stroke (border)
@@ -80,6 +133,11 @@ function extractInventory(rootNode) {
             tl: node.topLeftRadius, tr: node.topRightRadius,
             br: node.bottomRightRadius, bl: node.bottomLeftRadius
           };
+    }
+
+    // Overflow (clipping)
+    if ('clipsContent' in node && node.clipsContent) {
+      el.overflow = 'hidden';
     }
 
     // Component instance info

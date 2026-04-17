@@ -1,5 +1,5 @@
 ---
-name: pr-fixer
+name: pr-fix
 description: Fixes must-fix review issues on PR branches
 version: 1.0.0
 author: Yepeng Fan

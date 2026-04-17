@@ -56,6 +56,11 @@
     el.color = style.color;
     el.fontSize = style.fontSize;
     el.fontWeight = style.fontWeight;
+    el.textAlign = style.textAlign;
+    el.lineHeight = style.lineHeight;
+    if (style.letterSpacing && style.letterSpacing !== 'normal') el.letterSpacing = style.letterSpacing;
+    if (style.textDecorationLine && style.textDecorationLine !== 'none') el.textDecoration = style.textDecorationLine;
+    if (style.textTransform && style.textTransform !== 'none') el.textTransform = style.textTransform;
 
     const pad = {
       top: style.paddingTop, right: style.paddingRight,
@@ -64,6 +69,39 @@
     if (Object.values(pad).some(v => v !== '0px')) el.padding = pad;
 
     if (style.gap && style.gap !== 'normal') el.gap = style.gap;
+
+    // Layout properties
+    if (style.display === 'flex' || style.display === 'inline-flex') {
+      el.flexDirection = style.flexDirection;
+      el.alignItems = style.alignItems;
+      el.justifyContent = style.justifyContent;
+    }
+
+    // Opacity
+    if (style.opacity && style.opacity !== '1') el.opacity = style.opacity;
+
+    // Box shadow
+    if (style.boxShadow && style.boxShadow !== 'none') el.boxShadow = style.boxShadow;
+
+    // Border colors (when border exists)
+    if (el.border) {
+      el.borderColor = {
+        top: style.borderTopColor,
+        right: style.borderRightColor,
+        bottom: style.borderBottomColor,
+        left: style.borderLeftColor,
+      };
+    }
+
+    // Overflow
+    if (style.overflow && style.overflow !== 'visible') el.overflow = style.overflow;
+
+    // Min/max dimensions
+    if (style.minWidth && style.minWidth !== '0px') el.minWidth = style.minWidth;
+    if (style.maxWidth && style.maxWidth !== 'none') el.maxWidth = style.maxWidth;
+    if (style.minHeight && style.minHeight !== '0px') el.minHeight = style.minHeight;
+    if (style.maxHeight && style.maxHeight !== 'none') el.maxHeight = style.maxHeight;
+
     if (style.borderRadius && style.borderRadius !== '0px') {
       el.borderRadius = style.borderRadius;
     }
@@ -79,14 +117,24 @@
       };
     }
 
+    // Icon/SVG detection
+    const hasSvgChild = node.querySelector(':scope > svg') !== null;
+    if (hasSvgChild) el.hasIcon = true;
+    if (el.tag === 'svg') el.isIcon = true;
+
     // Determine if meaningful
     const isMeaningful =
       el.text || el.heading || el.role || el.testId || el.placeholder ||
-      el.backgroundColor || el.border ||
+      el.backgroundColor || el.border || el.hasIcon || el.isIcon ||
       ['button', 'input', 'textarea', 'table', 'th', 'td',
-       'label', 'h1', 'h2', 'h3', 'p'].includes(el.tag);
+       'label', 'h1', 'h2', 'h3', 'p', 'svg'].includes(el.tag);
 
     if (isMeaningful) elements.push(el);
+
+    // Element index among siblings (for order comparison)
+    if (node.parentElement) {
+      el.siblingIndex = Array.from(node.parentElement.children).indexOf(node);
+    }
 
     // Recurse
     for (const child of node.children) {

@@ -29,6 +29,7 @@
     "behaviors/",
     "criteria/",
     "profiles/",
+    "ref/",
     "scripts/"
   ],
   "keywords": [
