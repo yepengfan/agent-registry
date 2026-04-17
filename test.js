@@ -719,6 +719,16 @@ console.log('\n--- SKILL.md Skill Install and Uninstall ---');
   rmrf(home);
 }
 
+// Test: countInstalledSkills returns correct counts
+{
+  const { countInstalledSkills } = require('./lib/discovery');
+  const counts = countInstalledSkills('.');
+  assert(typeof counts === 'object', 'counts should be an object');
+  assert('commands' in counts, 'should have commands key');
+  assert('skillmd' in counts, 'should have skillmd key');
+  console.log('✓ countInstalledSkills returns counts');
+}
+
 // ── Summary ─────────────────────────────────────────────────
 
 console.log(`\n=== Results: ${passed} passed, ${failed} failed ===`);
