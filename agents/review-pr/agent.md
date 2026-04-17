@@ -8,7 +8,8 @@ model: opus
 color: purple
 tags: [pr-workflow, code-quality]
 subagents:
-  - pr-review-coordinator
+  - pr-code
+  - pr-design
   - pr-fix
 tools:
   - gh
@@ -33,7 +34,9 @@ Extract the registry root (two directories up) to locate criteria and profile de
 - Criteria: `{registry_root}/criteria/{name}.md`
 - Profiles: `{registry_root}/profiles/*.md`
 
-Sub-agents (pr-review-coordinator, pr-fix) are dispatched via `subagent_type` — their definitions are loaded automatically by Claude Code from `.claude/agents/`. The coordinator in turn dispatches pr-code (in batches) and pr-design internally.
+Sub-agents (pr-code, pr-design, pr-fix) are dispatched via `subagent_type` — their definitions are loaded automatically by Claude Code from `.claude/agents/`.
+
+**Architectural constraint:** Claude Code limits agent dispatch to depth-1. Sub-agents cannot spawn further sub-agents. All agent dispatches must happen directly from this orchestrator.
 
 ## Input Parsing
 
@@ -120,13 +123,13 @@ Determine whether to include design review in coordination:
    - If steering files found OR Figma URL found → `design_review_needed = true`
    - Otherwise → `design_review_needed = false`
 
-4. **If design review is needed**, read ALL matched `feature-*-figma.md` steering files and concatenate their contents. This merged content will be passed to the coordinator.
+4. **If design review is needed**, read ALL matched `feature-*-figma.md` steering files and concatenate their contents. This merged content will be passed to the design reviewer.
 
 ### Step 2c: Pre-verify MCP Tool Availability
 
 **Skip this step if `design_review_needed` is false.**
 
-When design review IS needed, probe each required MCP to verify availability. Pass the results to the coordinator.
+When design review IS needed, probe each required MCP to verify availability. Pass the results to the design reviewer.
 
 1. **Probe Playwright:** Call `mcp__playwright__browser_snapshot`. If it returns, set `playwright_available = true`. If it errors, set `playwright_available = false`.
 
@@ -162,45 +165,91 @@ If `round >= max_rounds`:
 - Report all unresolved issues from the last round
 - Exit the loop
 
-1. **Dispatch the Coordinator**
-   - Call `Agent(description: "PR #<number> Review Round <round>", subagent_type: "pr-review-coordinator", prompt: "Coordinate review for PR #<number>." + <resolved criteria context> + <design review context> + <prior round suggestions if any>)`
-   
-   The coordinator prompt must include:
+1. **Compute file batches and pre-fetch diffs**
+
+   a. Get per-file diff sizes:
+      ```bash
+      BASE=$(git merge-base main HEAD)
+      git diff $BASE HEAD --numstat
+      ```
+      This outputs `<insertions>\t<deletions>\t<filepath>` per file. Sum insertions + deletions per file.
+      Do NOT use `gh pr diff --stat` — it is not a valid flag.
+
+   b. **Batch files** targeting ≤ 500 diff lines per batch:
+      - Sort files by diff size descending
+      - Greedily assign to batches (each ≤ 500 lines)
+      - If a single file exceeds 500 lines, it gets its own batch
+      - The last batch is the designated **test runner**
+      - If total diff ≤ 500 lines, create one batch (also the test runner)
+
+   c. **Pre-fetch diffs** for each batch:
+      ```bash
+      git diff $BASE HEAD -- <file1> <file2> <file3>
+      ```
+      Capture the diff text — this will be passed directly to the reviewer. Sub-agents must NOT run git or gh commands to fetch diffs.
+
+2. **Dispatch all reviewers in parallel**
+
+   **Code reviewers** (one per batch):
    ```
-   ## Criteria
-   <all resolved criteria with full definitions>
-   
-   ## Design Review
-   needed: <true|false>
-   <if true: merged steering file contents, MCP availability, figma-design-match criterion>
-   <if true and round > 1: cached Figma inventory paths from prior round>
-   
-   ## Prior Round Suggestions
-   <accumulated suggestions from prior rounds, if any>
-   
-   ## Context
-   Task type: <detected_type>
-   Profile: <profile_name>
-   Registry root: <registry_root path>
+   Agent(
+     description: "PR #<N> Code Review Batch <B>/<total>",
+     subagent_type: "pr-code",
+     prompt: "Review PR #<N>.
+
+   ## Assigned Files
+   <file list with diff line counts>
+
+   ## Diff
+   The diff is provided below. Do NOT run gh or git diff commands.
+   ```diff
+   <pre-fetched diff text>
    ```
-   
-   - If `subagent_type` dispatch fails, fall back to reading the body of `{registry_root}/agents/pr-review-coordinator/agent.md` and passing it inline via the `prompt` parameter
-   - Wait for completion and capture the JSON response
-   - **Cache Figma inventories:** If the coordinator returns `cached_figma_inventories`, store these paths and include them in subsequent coordinator dispatches
+
+   ## Test Runner
+   <YES | NO>
+
+   <criteria context>
+   <prior round suggestions>"
+   )
+   ```
+   If `subagent_type` dispatch fails, fall back to reading `{registry_root}/agents/pr-code/agent.md` inline.
+
+   **Design reviewer** (only if `design_review_needed` is true):
+   ```
+   Agent(
+     description: "PR #<N> Design Review",
+     subagent_type: "pr-design",
+     prompt: "Verify PR #<N> design fidelity.
+   <figma-design-match criterion>
+   <merged steering context>
+   <MCP availability>
+   <cached Figma inventories if round > 1>"
+   )
+   ```
+   If `subagent_type` dispatch fails, fall back to reading `{registry_root}/agents/pr-design/agent.md` inline.
+
+   All reviewers dispatched in parallel — they are independent.
+
+3. **Merge results**
+   - Wait for all reviewers to complete
+   - Concatenate all `issues` arrays, deduplicate by `file` + `line` + `message`
+   - Merge `criteria_results`: `all-tests-pass` from the test runner batch, `zero-must-fix-issues` recomputed from merged issues, `figma-design-match` from design reviewer
+   - **Cache Figma inventories:** if the design reviewer returned `cached_figma_inventories`, store for subsequent rounds
    - Increment `round`
 
-2. **Evaluate Results**
-   - Parse the reviewer's JSON output. Check `criteria_results`.
+4. **Evaluate Results**
+   - Parse each reviewer's JSON output. Check `criteria_results`.
    - Extract all entries where `gate: true` and `pass: false`
    - Advisory criteria (`gate: false`) are reported but never block.
 
-3. **If zero must-fix issues (clean run):**
+5. **If zero must-fix issues (clean run):**
    - Increment `consecutive_clean`
    - Post a round summary comment on the PR
    - If `consecutive_clean >= required_clean` → exit loop
-   - Otherwise → loop back to step 1 (dispatch reviewer again with fresh eyes)
+   - Otherwise → loop back to step 1 (dispatch reviewers again with fresh eyes)
 
-4. **If must-fix issues found:**
+6. **If must-fix issues found:**
    - Reset `consecutive_clean = 0`
    - **Dispatch the Fixer:**
      - Extract only `must-fix` issues
