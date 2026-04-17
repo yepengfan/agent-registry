@@ -58,10 +58,16 @@ DETERMINISTIC FACTS — do not reassess:
 - build_pass: <value from gates.json>
 ```
 
-- Explicit instruction: "Output only JSON matching the schema in your agent prompt. No prose."
+Tell the reviewer explicitly and imperatively to use the Write tool. The prompt should include:
 
-Tell the reviewer explicitly where to write:
-`Write findings to .pr-review-state/findings_raw_round_<N>.json`
+You have the Write tool. Use it to save your findings JSON to:
+.pr-review-state/findings_raw_round_{N}.json
+
+Do NOT return the JSON in your response. Do NOT emit <function_calls> XML or any tool-call-looking text. Actually invoke the Write tool through the tool interface.
+
+After Write succeeds, return only a one-line confirmation matching the format in your agent prompt.
+
+The above text block is sent verbatim to pr-reviewer (with {N} replaced by actual round number). This language is redundant with pr-reviewer's agent.md prompt but the redundancy is intentional — reviewers sometimes slip back into "pure LLM mode" if not strongly reminded they're a tool-using agent.
 
 The reviewer writes the JSON file itself using the Write tool and returns only a one-line confirmation. You do NOT need to capture and save the reviewer's response content — the file is already on disk. Verify the file exists before proceeding to Step 3.
 
