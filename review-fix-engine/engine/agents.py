@@ -91,7 +91,7 @@ async def _run_query(prompt: str, options: ClaudeAgentOptions, tag: str) -> tupl
 async def review_single(
     name: str, base_prompt: str, focus_prompt: str,
     diff: str, gates_summary: str, round_num: int,
-    cwd: Path, max_turns: int = 5,
+    cwd: Path, max_turns: int = 5, model: str | None = None,
 ) -> tuple[list[Finding], float]:
     tag = name
     prompt = f"""{base_prompt}
@@ -113,6 +113,7 @@ PR diff:
 
     options = ClaudeAgentOptions(
         permission_mode="dontAsk",
+        model=model,
         cwd=cwd,
         max_turns=max_turns,
         include_partial_messages=True,
@@ -138,7 +139,7 @@ PR diff:
 async def review_parallel(
     reviewers: list[str], prompts: dict[str, str],
     diff: str, gates_summary: str, round_num: int,
-    cwd: Path, max_turns: int = 5,
+    cwd: Path, max_turns: int = 5, model: str | None = None,
 ) -> tuple[dict[str, list[Finding]], float]:
     base_prompt = prompts["_base"]
 
@@ -150,7 +151,7 @@ async def review_parallel(
         focus_prompt = prompts[name]
         tasks.append(review_single(
             name, base_prompt, focus_prompt,
-            diff, gates_summary, round_num, cwd, max_turns,
+            diff, gates_summary, round_num, cwd, max_turns, model=model,
         ))
 
     results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -178,7 +179,7 @@ async def review_parallel(
 
 async def self_reflect(
     findings: list[Finding], diff: str,
-    cwd: Path, score_threshold: int = 5,
+    cwd: Path, score_threshold: int = 5, model: str | None = None,
 ) -> tuple[list[Finding], float]:
     if not findings:
         return [], 0.0
@@ -206,6 +207,7 @@ Diff for reference:
 
     options = ClaudeAgentOptions(
         permission_mode="dontAsk",
+        model=model,
         cwd=cwd,
         max_turns=2,
     )

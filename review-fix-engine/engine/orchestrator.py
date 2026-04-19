@@ -125,6 +125,7 @@ async def run(config: Config) -> dict:
         round_num=1,
         cwd=config.cwd,
         max_turns=config.reviewer_max_turns,
+        model=config.model,
     )
 
     # All-reviewers-fail guard
@@ -147,7 +148,7 @@ async def run(config: Config) -> dict:
     try:
         reflected, reflect_cost = await agents.self_reflect(
             findings=merged, diff=diff, cwd=config.cwd,
-            score_threshold=config.score_threshold,
+            score_threshold=config.score_threshold, model=config.model,
         )
         total_cost = review_cost + reflect_cost
     except Exception as e:
