@@ -12,7 +12,7 @@ from claude_agent_sdk import (
 )
 
 from .schema import Finding, ReviewOutput
-from .progress import sdk_message, info, warn, is_quiet, update_progress
+from .progress import sdk_message, info, warn, is_quiet, update_progress, init_reviewers, finish_progress, get_tag_elapsed
 
 
 def _load_prompt(path: Path) -> str:
@@ -142,6 +142,9 @@ async def review_parallel(
 ) -> tuple[dict[str, list[Finding]], float]:
     base_prompt = prompts["_base"]
 
+    if is_quiet():
+        init_reviewers(reviewers)
+
     tasks = []
     for name in reviewers:
         focus_prompt = prompts[name]
@@ -157,12 +160,18 @@ async def review_parallel(
 
     for name, result in zip(reviewers, results):
         if isinstance(result, Exception):
+            if is_quiet():
+                finish_progress(name, 0, 0.0, 0.0)
             warn(name, f"reviewer failed: {result}")
             continue
         findings, cost = result
         findings_by_reviewer[name] = findings
         total_cost += cost
-        info(name, f"found {len(findings)} issues (${cost:.4f})")
+        elapsed = get_tag_elapsed(name)
+        if is_quiet():
+            finish_progress(name, len(findings), cost, elapsed)
+        else:
+            info(name, f"found {len(findings)} issues (${cost:.4f})")
 
     return findings_by_reviewer, total_cost
 
