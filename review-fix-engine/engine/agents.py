@@ -12,7 +12,7 @@ from claude_agent_sdk import (
 )
 
 from .schema import Finding, ReviewOutput
-from .progress import sdk_message, info, warn, is_quiet
+from .progress import sdk_message, info, warn, is_quiet, update_progress
 
 
 def _load_prompt(path: Path) -> str:
@@ -63,7 +63,9 @@ async def _run_query(prompt: str, options: ClaudeAgentOptions, tag: str) -> tupl
         async for message in query(prompt=prompt, options=options):
             msg_count += 1
             now = time.monotonic()
-            if now - last_heartbeat >= 30 and not is_quiet():
+            if is_quiet():
+                update_progress(tag, msg_count, now - start)
+            elif now - last_heartbeat >= 30:
                 info(tag, f"still working... {now - start:.0f}s elapsed, {msg_count} messages")
                 last_heartbeat = now
             sdk_message(message, tag)

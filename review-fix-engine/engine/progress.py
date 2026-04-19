@@ -74,8 +74,15 @@ _stderr = sys.stderr
 
 def _get_tag_state(tag: str) -> dict:
     if tag not in _tag_state:
-        _tag_state[tag] = {"tokens": 0, "start": time.monotonic(), "snippet": ""}
+        _tag_state[tag] = {"tokens": 0, "msgs": 0, "elapsed": 0.0, "start": time.monotonic(), "snippet": ""}
     return _tag_state[tag]
+
+
+def update_progress(tag: str, msg_count: int, elapsed: float):
+    state = _get_tag_state(tag)
+    state["msgs"] = msg_count
+    state["elapsed"] = elapsed
+    _render_combined_line()
 
 
 def _render_combined_line(force: bool = False):
@@ -96,9 +103,11 @@ def _render_combined_line(force: bool = False):
     parts = []
     for tag, s in _tag_state.items():
         snippet = s["snippet"].replace("\n", " ").strip()
-        if len(snippet) > 30:
-            snippet = snippet[:27] + "..."
-        part = f"{tag}:{s['tokens']}t"
+        if len(snippet) > 25:
+            snippet = snippet[:22] + "..."
+        part = f"{tag}:{s['msgs']}msg"
+        if s["tokens"]:
+            part += f" {s['tokens']}t"
         if snippet:
             part += f" {snippet}"
         parts.append(part)
@@ -138,7 +147,6 @@ def sdk_message(message, tag: str):
                     state = _get_tag_state(tag)
                     state["tokens"] += len(text.split())
                     state["snippet"] = text
-                    _render_combined_line()
                 else:
                     sys.stdout.write(f"{C.DIM}{text}{C.RESET}")
                     sys.stdout.flush()
