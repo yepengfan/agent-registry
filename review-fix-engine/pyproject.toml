@@ -1,0 +1,18 @@
+[project]
+name = "review-fix-engine"
+version = "0.1.0"
+description = "PR review engine with parallel specialized reviewers"
+requires-python = ">=3.11"
+dependencies = [
+    "claude-agent-sdk>=0.1.0",
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+review-fix = "engine.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["engine*", "agents*"]
