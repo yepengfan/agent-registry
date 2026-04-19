@@ -12,7 +12,7 @@ from claude_agent_sdk import (
 )
 
 from .schema import Finding, ReviewOutput
-from .progress import sdk_message, info, warn, C
+from .progress import sdk_message, info, warn
 
 
 def _load_prompt(path: Path) -> str:
@@ -32,8 +32,11 @@ def _extract_json(text: str) -> dict | None:
             return json.loads(fence.group(1))
         except json.JSONDecodeError:
             pass
-    brace = text.find("{")
-    if brace >= 0:
+    start = 0
+    while True:
+        brace = text.find("{", start)
+        if brace < 0:
+            break
         depth = 0
         for i in range(brace, len(text)):
             if text[i] == "{": depth += 1
@@ -43,7 +46,9 @@ def _extract_json(text: str) -> dict | None:
                     try:
                         return json.loads(text[brace:i+1])
                     except json.JSONDecodeError:
-                        break
+                        pass
+                    break
+        start = brace + 1
     return None
 
 
