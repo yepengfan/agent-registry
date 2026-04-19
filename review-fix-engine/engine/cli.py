@@ -12,7 +12,7 @@ from .orchestrator import run
 from .progress import C, info, success, error
 
 
-def parse_args() -> Config:
+def parse_args() -> tuple[Config, Path | None]:
     parser = argparse.ArgumentParser(description="PR review engine with parallel specialized reviewers")
     parser.add_argument("--pr", type=int, help="PR number to review")
     parser.add_argument("--repo", type=str, help="GitHub repo (owner/repo)")

@@ -122,6 +122,11 @@ async def run(config: Config) -> dict:
         max_turns=config.reviewer_max_turns,
     )
 
+    # All-reviewers-fail guard
+    if not findings_by_reviewer:
+        p.error("review", "All reviewers failed")
+        return {"status": "error", "reason": "all reviewers failed", "cost": review_cost, "duration": timer.elapsed()}
+
     # Merge + dedup
     merged = merge_and_dedup(findings_by_reviewer)
     p.info("merge", f"{len(merged)} findings after dedup")
@@ -134,11 +139,17 @@ async def run(config: Config) -> dict:
 
     # Self-reflection
     p.phase("Self-Reflection")
-    reflected, reflect_cost = await agents.self_reflect(
-        findings=merged, diff=diff, cwd=config.cwd,
-        score_threshold=config.score_threshold,
-    )
-    total_cost = review_cost + reflect_cost
+    try:
+        reflected, reflect_cost = await agents.self_reflect(
+            findings=merged, diff=diff, cwd=config.cwd,
+            score_threshold=config.score_threshold,
+        )
+        total_cost = review_cost + reflect_cost
+    except Exception as e:
+        p.warn("reflect", f"Self-reflection failed: {e}, passing all findings to grounding")
+        reflected = merged
+        total_cost = review_cost
+        reflect_cost = 0.0
     p.info("reflect", f"{len(reflected)} findings after scoring (${reflect_cost:.4f})")
 
     # Grounding
