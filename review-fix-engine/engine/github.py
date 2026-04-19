@@ -12,7 +12,7 @@ def format_comment_body(finding: Finding) -> str:
     return (
         f"{icon} **[{finding.source_reviewer} \u00b7 {sev_label}] {finding.claim}**\n\n"
         f"{finding.reasoning}\n\n"
-        f"> ```\n> {finding.quoted_code}\n> ```\n\n"
+        f"> ```\n" + "\n".join(f"> {line}" for line in finding.quoted_code.splitlines()) + "\n> ```\n\n"
         f"**Suggested fix:** {finding.suggested_fix}\n\n"
         f"*Found by: {finding.source_reviewer} reviewer*"
     )
@@ -56,8 +56,9 @@ def post_pr_review(pr_number: int, repo: str, findings: list[Finding],
     })
 
     result = subprocess.run(
-        f"gh api repos/{repo}/pulls/{pr_number}/reviews --method POST --input -",
-        input=payload, shell=True, capture_output=True, text=True,
+        ["gh", "api", f"repos/{repo}/pulls/{pr_number}/reviews",
+         "--method", "POST", "--input", "-"],
+        input=payload, capture_output=True, text=True,
         cwd=cwd,
     )
     return result.returncode == 0
