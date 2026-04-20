@@ -7,9 +7,11 @@ from pathlib import Path
 
 from . import agents, grounding, progress as p
 from .config import Config
+from .devserver import start_dev_server, stop_dev_server
 from .merge import merge_and_dedup
 from .github import post_pr_review
 from .schema import Finding, Severity
+from .steering import find_steering
 
 
 def _build_gh_cmd(base: list[str], config: Config) -> list[str]:
@@ -162,6 +164,7 @@ async def run(config: Config) -> dict:
     for name in config.reviewers:
         prompts[name] = (agents_dir / f"reviewer_{name}.md").read_text().strip()
     fixer_prompt = (agents_dir / "fixer.md").read_text().strip() if config.fix else ""
+    design_prompt = (agents_dir / "reviewer_design.md").read_text().strip() if not config.skip_design else ""
 
     print(f"{p.C.BOLD}=== Review-Fix Engine ==={p.C.RESET}")
     p.info("setup", f"cwd={config.cwd}")
@@ -237,10 +240,58 @@ async def run(config: Config) -> dict:
     ground_result = grounding.verify(reflected, config.cwd)
     p.ground_result(ground_result.grounded, ground_result.dropped, gt.elapsed())
 
+    # Design Check
+    design_findings: list[Finding] = []
+    design_cost = 0.0
+    all_grounded = list(ground_result.grounded)
+
+    if not config.skip_design and config.dev_cmd and design_prompt:
+        steering = find_steering(config.cwd)
+        if steering:
+            p.phase("Design Check")
+            p.info("design", f"Figma: {steering.get('figma_url', '?')}")
+            p.info("design", f"Route: {steering.get('page_route', '/')}")
+
+            server = await start_dev_server(config.dev_cmd, steering.get("dev_port", config.dev_port), config.cwd)
+            try:
+                page_url = f"http://localhost:{steering.get('dev_port', config.dev_port)}{steering['page_route']}"
+
+                if p.is_quiet():
+                    p.init_reviewers(["design"])
+                    await p.start_progress_ticker()
+
+                design_findings, design_cost = await agents.design_review(
+                    design_prompt=design_prompt,
+                    figma_url=steering["figma_url"],
+                    figma_file_key=steering.get("figma_file_key", ""),
+                    figma_node_id=steering.get("figma_node_id", ""),
+                    page_url=page_url,
+                    cwd=config.cwd,
+                    model=config.model,
+                )
+                total_cost += design_cost
+
+                if p.is_quiet():
+                    p.stop_progress_ticker()
+                    p.finish_progress("design", len(design_findings), design_cost, p.get_tag_elapsed("design"))
+
+                p.info("design", f"{len(design_findings)} design mismatches found (${design_cost:.2f})")
+                for f in design_findings:
+                    p.finding(f)
+
+                all_grounded = list(ground_result.grounded) + design_findings
+            except Exception as e:
+                if p.is_quiet():
+                    p.stop_progress_ticker()
+                    p.finish_progress("design", 0, 0.0, 0.0)
+                p.warn("design", f"Design check failed: {e}")
+            finally:
+                stop_dev_server(server)
+
     # Fix
     fix_cost = 0.0
     fix_status = "skipped"
-    must_fix = [f for f in ground_result.grounded if f.severity == Severity.MUST_FIX]
+    must_fix = [f for f in all_grounded if f.severity == Severity.MUST_FIX]
 
     if config.fix and must_fix and not config.dry_run:
         p.phase("Fix")
@@ -327,14 +378,16 @@ async def run(config: Config) -> dict:
         "after_dedup": len(merged),
         "after_reflection": len(reflected),
         "after_grounding": ground_result.grounded_count,
+        "design_mismatches": len(design_findings),
+        "design_cost": design_cost,
         "fix_status": fix_status,
         "fix_cost": fix_cost,
     }
 
     # Post to GitHub
-    if not config.dry_run and config.pr_number and config.repo and ground_result.grounded:
+    if not config.dry_run and config.pr_number and config.repo and all_grounded:
         p.phase("Post to GitHub")
-        ok = post_pr_review(config.pr_number, config.repo, ground_result.grounded, stats, str(config.cwd))
+        ok = post_pr_review(config.pr_number, config.repo, all_grounded, stats, str(config.cwd))
         if ok:
             p.success("github", "Review posted to PR")
         else:
@@ -344,6 +397,6 @@ async def run(config: Config) -> dict:
 
     return {
         "status": "reviewed",
-        "findings": [f.model_dump() for f in ground_result.grounded],
+        "findings": [f.model_dump() for f in all_grounded],
         "stats": stats,
     }

@@ -62,6 +62,10 @@ class Config:
     fix_model: str | None = None
     reviewers: list[str] = field(default_factory=lambda: ["security", "logic", "edge_case"])
 
+    dev_cmd: str = ""
+    dev_port: int = 3000
+    skip_design: bool = False
+
     state_dir: str = ".pr-review-state"
     test_cmd: str = ""
     lint_cmd: str = ""

@@ -286,3 +286,60 @@ async def fix_findings(
     result, last_text = await _run_query(prompt, options, "fixer")
     cost = result.total_cost_usd or 0.0
     return result.result or last_text, cost
+
+
+async def design_review(
+    design_prompt: str,
+    figma_url: str,
+    figma_file_key: str,
+    figma_node_id: str,
+    page_url: str,
+    cwd: Path,
+    max_turns: int = 15,
+    model: str | None = None,
+) -> tuple[list[Finding], float]:
+    prompt = f"""{design_prompt}
+
+---
+
+## Figma Design
+
+- **URL:** {figma_url}
+- **File key:** {figma_file_key}
+- **Node ID:** {figma_node_id}
+
+Use `figma:get_design_context` with fileKey="{figma_file_key}" and nodeId="{figma_node_id}" to extract the design properties.
+
+## Live Page
+
+- **URL:** {page_url}
+
+Navigate to this URL using Playwright, then extract computed styles from the DOM.
+
+## Output
+
+Output ONLY a JSON object with findings (same format as code review findings)."""
+
+    options = ClaudeAgentOptions(
+        permission_mode="dontAsk",
+        model=model,
+        cwd=cwd,
+        max_turns=max_turns,
+        include_partial_messages=True,
+    )
+
+    result, last_text = await _run_query(prompt, options, "design")
+
+    findings: list[Finding] = []
+    text = result.result or last_text
+    parsed = _extract_json(text)
+    if parsed:
+        output = ReviewOutput.model_validate(parsed)
+        for f in output.findings:
+            f.source_reviewer = "design"
+        findings = output.findings
+    elif text:
+        warn("design", f"Could not parse JSON: {text[:200]}")
+
+    cost = result.total_cost_usd or 0.0
+    return findings, cost
