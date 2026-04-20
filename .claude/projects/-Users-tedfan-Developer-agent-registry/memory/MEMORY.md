@@ -1,3 +1,0 @@
-- [Never commit directly to main](feedback_no_direct_main.md) — Always use feature branches, never push to main directly
-- [Release process](reference_release_process.md) — Publish via GitHub Release tag, not npm publish locally
-- [SDK POC learnings](project_sdk_poc_learnings.md) — Claude Agent SDK constraints, performance findings, and validated architecture from POC (PR #31)

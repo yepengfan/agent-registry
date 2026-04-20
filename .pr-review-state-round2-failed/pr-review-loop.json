@@ -1,7 +1,0 @@
-{
-  "round": 0,
-  "max_rounds": 6,
-  "required_consecutive_clean": 2,
-  "hard_fail_on_gate_failure_rounds": 3,
-  "history": []
-}

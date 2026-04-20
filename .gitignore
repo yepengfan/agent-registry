@@ -6,3 +6,6 @@ node_modules/
 __pycache__/
 # Runtime state from pr-review-loop skill
 .pr-review-state/
+.pr-review-state-round2-failed/
+.claude/
+docs/
