@@ -250,7 +250,8 @@ async def run(config: Config) -> dict:
                     ["git", "commit", "-m", f"fix: auto-fix {len(must_fix)} must-fix findings"],
                     cwd=config.cwd, capture_output=True,
                 )
-                p.success("fix", f"Committed fixes for {len(must_fix)} findings (${fix_cost:.2f})")
+                subprocess.run(["git", "push"], cwd=config.cwd, capture_output=True)
+                p.success("fix", f"Committed and pushed fixes for {len(must_fix)} findings (${fix_cost:.2f})")
                 fix_status = "committed"
             else:
                 subprocess.run(["git", "checkout", "."], cwd=config.cwd, capture_output=True)
