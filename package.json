@@ -9,7 +9,8 @@
     "url": "https://github.com/yepengfan/agent-registry"
   },
   "bin": {
-    "agent-registry": "./bin/cli.js"
+    "agent-registry": "./bin/cli.js",
+    "review-fix": "./bin/review-fix"
   },
   "scripts": {
     "postinstall": "node bin/cli.js install"
@@ -29,7 +30,8 @@
     "behaviors/",
     "criteria/",
     "profiles/",
-    "scripts/"
+    "scripts/",
+    "review-fix-engine/"
   ],
   "keywords": [
     "claude",

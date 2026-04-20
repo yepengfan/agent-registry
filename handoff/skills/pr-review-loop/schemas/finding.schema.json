@@ -1,0 +1,68 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PR Review Finding Output",
+  "description": "Strict schema for pr-reviewer output. Enforced by the pr-review-loop skill.",
+  "type": "object",
+  "required": ["summary", "findings"],
+  "additionalProperties": false,
+  "properties": {
+    "summary": {
+      "type": "string",
+      "description": "One-sentence overall assessment of the PR"
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id", "severity", "category", "claim",
+          "file", "line_start", "line_end", "quoted_code", "suggested_fix"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^F-[0-9]{3,}$",
+            "description": "Finding identifier, format F-001, F-002, ..."
+          },
+          "severity": {
+            "enum": ["must-fix", "nice-to-have"]
+          },
+          "category": {
+            "enum": ["correctness", "security", "style", "testing", "other"]
+          },
+          "claim": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "What's wrong, in one sentence"
+          },
+          "reasoning": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "Why this is a problem"
+          },
+          "file": {
+            "type": "string",
+            "description": "Path relative to repo root"
+          },
+          "line_start": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "line_end": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "quoted_code": {
+            "type": "string",
+            "description": "VERBATIM copy of lines from the file. Any deviation causes the finding to be dropped as hallucinated by the grounding step."
+          },
+          "suggested_fix": {
+            "type": "string",
+            "description": "Concrete fix description or code snippet"
+          }
+        }
+      }
+    }
+  }
+}
