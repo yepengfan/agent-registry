@@ -7,26 +7,26 @@ import json
 import sys
 from pathlib import Path
 
-from .config import Config
+from .config import Config, detect_pr
 from .orchestrator import run
 from .progress import C, info, success, error, set_quiet
 
 
 def parse_args() -> tuple[Config, Path | None]:
     parser = argparse.ArgumentParser(description="PR review engine with parallel specialized reviewers")
-    parser.add_argument("--pr", type=int, help="PR number to review")
-    parser.add_argument("--repo", type=str, help="GitHub repo (owner/repo)")
+    parser.add_argument("pr", nargs="?", type=int, default=None, help="PR number (auto-detects if omitted)")
+    parser.add_argument("--repo", type=str, default=None, help="GitHub repo (auto-detected from git remote)")
     parser.add_argument("--diff-file", type=Path, help="Path to diff file")
     parser.add_argument("--dry-run", action="store_true", help="Skip GitHub comment posting")
     parser.add_argument("--reviewers", type=str, default="security,logic,edge_case",
                         help="Comma-separated reviewer names")
     parser.add_argument("--score-threshold", type=int, default=5, help="Self-reflection score threshold (0-10)")
     parser.add_argument("--cwd", type=Path, default=None)
-    parser.add_argument("--test-cmd", type=str, default="npm test")
+    parser.add_argument("--test-cmd", type=str, default="")
     parser.add_argument("--lint-cmd", type=str, default="", help="Lint command for gates (e.g. 'eslint .')")
     parser.add_argument("--build-cmd", type=str, default="", help="Build command for gates (e.g. 'tsc --noEmit')")
     parser.add_argument("--output-json", type=Path, help="Write results JSON to file")
-    parser.add_argument("-q", "--quiet", action="store_true", help="Suppress LLM streaming output, show only progress")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Show full LLM streaming output")
     parser.add_argument("--model", type=str, default="anthropic.claude-4-6-sonnet[1m]", help="Model for reviewer agents (default: sonnet)")
     parser.add_argument("--no-fix", action="store_true", help="Skip fix phase (review only)")
     parser.add_argument("--fix-model", type=str, default=None, help="Model for fixer agent (defaults to --model)")
@@ -34,7 +34,6 @@ def parse_args() -> tuple[Config, Path | None]:
 
     config = Config(
         pr_number=args.pr,
-        repo=args.repo,
         diff_file=args.diff_file,
         dry_run=args.dry_run,
         model=args.model,
@@ -46,9 +45,18 @@ def parse_args() -> tuple[Config, Path | None]:
         lint_cmd=args.lint_cmd,
         build_cmd=args.build_cmd,
     )
+    if args.repo:
+        config.repo = args.repo
     if args.cwd:
         config.cwd = args.cwd
-    if args.quiet:
+    if config.pr_number is None and not config.diff_file:
+        config.pr_number = detect_pr(config.repo)
+        if config.pr_number:
+            info("setup", f"Auto-detected PR #{config.pr_number}")
+        else:
+            error("setup", "No PR number given and none detected on current branch")
+            sys.exit(1)
+    if not args.verbose:
         set_quiet()
     return config, args.output_json
 
