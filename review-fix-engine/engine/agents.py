@@ -131,6 +131,8 @@ PR diff:
         findings = output.findings
     elif text:
         warn(tag, f"Could not parse JSON: {text[:200]}")
+    else:
+        warn(tag, "SDK returned empty result — treating as 0 findings, may be a silent failure")
 
     cost = result.total_cost_usd or 0.0
     return findings, cost

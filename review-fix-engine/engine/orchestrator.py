@@ -274,14 +274,27 @@ async def run(config: Config) -> dict:
 
                 if gates_ok:
                     files_to_stage = list(set(f.file for f in must_fix))
-                    subprocess.run(["git", "add"] + files_to_stage, cwd=config.cwd, capture_output=True)
-                    subprocess.run(
-                        ["git", "commit", "-m", f"fix: auto-fix {len(must_fix)} must-fix findings"],
-                        cwd=config.cwd, capture_output=True,
-                    )
-                    subprocess.run(["git", "push"], cwd=config.cwd, capture_output=True)
-                    p.success("fix", f"Committed and pushed fixes for {len(must_fix)} findings (${fix_cost:.2f})")
-                    fix_status = "committed"
+                    r_add = subprocess.run(["git", "add"] + files_to_stage, cwd=config.cwd, capture_output=True)
+                    if r_add.returncode != 0:
+                        p.error("fix", f"git add failed: {r_add.stderr.decode().strip()}")
+                        _revert_changes(config.cwd)
+                        fix_status = "failed"
+                    else:
+                        r_commit = subprocess.run(
+                            ["git", "commit", "-m", f"fix: auto-fix {len(must_fix)} must-fix findings"],
+                            cwd=config.cwd, capture_output=True,
+                        )
+                        if r_commit.returncode != 0:
+                            p.error("fix", f"git commit failed: {r_commit.stderr.decode().strip()}")
+                            subprocess.run(["git", "reset", "HEAD", "--"] + files_to_stage, cwd=config.cwd, capture_output=True)
+                            _revert_changes(config.cwd)
+                            fix_status = "failed"
+                        else:
+                            r_push = subprocess.run(["git", "push"], cwd=config.cwd, capture_output=True)
+                            if r_push.returncode != 0:
+                                p.warn("fix", f"git push failed (commit local only): {r_push.stderr.decode().strip()}")
+                            p.success("fix", f"Committed fixes for {len(must_fix)} findings (${fix_cost:.2f})")
+                            fix_status = "committed"
                 else:
                     _revert_changes(config.cwd)
                     p.warn("fix", "Gates failed after fix — reverted all changes")
