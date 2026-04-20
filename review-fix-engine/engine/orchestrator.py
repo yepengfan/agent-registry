@@ -5,7 +5,7 @@ import asyncio
 import subprocess
 from pathlib import Path
 
-from . import agents, grounding, progress as p
+from . import agents, grounding, progress as p, design_check, design_scripts
 from .config import Config
 from .devserver import start_dev_server, stop_dev_server
 from .merge import merge_and_dedup
@@ -164,7 +164,22 @@ async def run(config: Config) -> dict:
     for name in config.reviewers:
         prompts[name] = (agents_dir / f"reviewer_{name}.md").read_text().strip()
     fixer_prompt = (agents_dir / "fixer.md").read_text().strip() if config.fix else ""
-    design_prompt = (agents_dir / "reviewer_design.md").read_text().strip() if not config.skip_design else ""
+
+    # Pre-load design extraction resources
+    figma_extractor_prompt = ""
+    dom_extractor_prompt = ""
+    figma_script_template = ""
+    dom_script_template = ""
+    diff_script_path = None
+    if not config.skip_design and config.dev_cmd:
+        try:
+            figma_extractor_prompt = (agents_dir / "extractor_figma.md").read_text().strip()
+            dom_extractor_prompt = (agents_dir / "extractor_dom.md").read_text().strip()
+            figma_script_template = design_scripts.load_figma_extract_template()
+            dom_script_template = design_scripts.load_dom_extract_template()
+            diff_script_path = design_scripts.get_design_diff_path()
+        except FileNotFoundError:
+            p.warn("setup", "Design check scripts not found — skipping design check")
 
     print(f"{p.C.BOLD}=== Review-Fix Engine ==={p.C.RESET}")
     p.info("setup", f"cwd={config.cwd}")
@@ -240,12 +255,12 @@ async def run(config: Config) -> dict:
     ground_result = grounding.verify(reflected, config.cwd)
     p.ground_result(ground_result.grounded, ground_result.dropped, gt.elapsed())
 
-    # Design Check
+    # Design Check (deterministic: extract → extract → diff)
     design_findings: list[Finding] = []
     design_cost = 0.0
     all_grounded = list(ground_result.grounded)
 
-    if not config.skip_design and config.dev_cmd and design_prompt:
+    if not config.skip_design and config.dev_cmd and figma_extractor_prompt and diff_script_path:
         steering = find_steering(config.cwd)
         if steering:
             p.phase("Design Check")
@@ -255,35 +270,54 @@ async def run(config: Config) -> dict:
             server = await start_dev_server(config.dev_cmd, steering.get("dev_port", config.dev_port), config.cwd)
             try:
                 page_url = f"http://localhost:{steering.get('dev_port', config.dev_port)}{steering['page_route']}"
+                node_id = steering.get("figma_node_id", "")
+                file_key = steering.get("figma_file_key", "")
 
-                if p.is_quiet():
-                    p.init_reviewers(["design"])
-                    await p.start_progress_ticker()
-
-                design_findings, design_cost = await agents.design_review(
-                    design_prompt=design_prompt,
-                    figma_url=steering["figma_url"],
-                    figma_file_key=steering.get("figma_file_key", ""),
-                    figma_node_id=steering.get("figma_node_id", ""),
-                    page_url=page_url,
-                    cwd=config.cwd,
-                    model=config.model,
+                # Step 1: Extract Figma inventory (agent → MCP tool)
+                p.info("design", "Extracting Figma inventory...")
+                figma_script = design_scripts.inject_figma_node_id(figma_script_template, node_id)
+                figma_inv, figma_cost = await agents.extract_figma_inventory(
+                    extractor_prompt=figma_extractor_prompt,
+                    figma_file_key=file_key,
+                    figma_extract_script=figma_script,
+                    cwd=config.cwd, model=config.model,
                 )
+                design_cost += figma_cost
+
+                # Step 2: Extract DOM inventory (agent → Playwright)
+                p.info("design", "Extracting DOM inventory...")
+                dom_script = design_scripts.inject_dom_root_selector(dom_script_template)
+                dom_inv, dom_cost = await agents.extract_dom_inventory(
+                    extractor_prompt=dom_extractor_prompt,
+                    page_url=page_url,
+                    dom_extract_script=dom_script,
+                    cwd=config.cwd, model=config.model,
+                )
+                design_cost += dom_cost
+
+                # Step 3: Deterministic diff (subprocess, no LLM)
+                if figma_inv and dom_inv:
+                    p.info("design", "Running deterministic diff...")
+                    diff_result = design_check.run_design_diff(figma_inv, dom_inv, diff_script_path)
+
+                    # Step 4: Convert mismatches to findings
+                    design_findings = design_check.mismatches_to_findings(diff_result)
+                    inv = diff_result.get("inventory", {})
+                    p.info("design", f"{len(design_findings)} mismatches "
+                           f"({inv.get('mapped_pairs', 0)} pairs mapped, "
+                           f"{inv.get('unmatched_figma', 0)} unmatched Figma, "
+                           f"{inv.get('unmatched_dom', 0)} unmatched DOM)")
+                    for f in design_findings:
+                        p.finding(f)
+                else:
+                    if not figma_inv:
+                        p.warn("design", "Figma extraction failed — skipping design diff")
+                    if not dom_inv:
+                        p.warn("design", "DOM extraction failed — skipping design diff")
+
                 total_cost += design_cost
-
-                if p.is_quiet():
-                    p.stop_progress_ticker()
-                    p.finish_progress("design", len(design_findings), design_cost, p.get_tag_elapsed("design"))
-
-                p.info("design", f"{len(design_findings)} design mismatches found (${design_cost:.2f})")
-                for f in design_findings:
-                    p.finding(f)
-
                 all_grounded = list(ground_result.grounded) + design_findings
             except Exception as e:
-                if p.is_quiet():
-                    p.stop_progress_ticker()
-                    p.finish_progress("design", 0, 0.0, 0.0)
                 p.warn("design", f"Design check failed: {e}")
             finally:
                 stop_dev_server(server)

@@ -288,58 +288,85 @@ async def fix_findings(
     return result.result or last_text, cost
 
 
-async def design_review(
-    design_prompt: str,
-    figma_url: str,
+async def extract_figma_inventory(
+    extractor_prompt: str,
     figma_file_key: str,
-    figma_node_id: str,
-    page_url: str,
+    figma_extract_script: str,
     cwd: Path,
-    max_turns: int = 15,
     model: str | None = None,
-) -> tuple[list[Finding], float]:
-    prompt = f"""{design_prompt}
+) -> tuple[dict | None, float]:
+    prompt = f"""{extractor_prompt}
 
 ---
 
-## Figma Design
+## Figma File Key
+{figma_file_key}
 
-- **URL:** {figma_url}
-- **File key:** {figma_file_key}
-- **Node ID:** {figma_node_id}
+## Extraction Script
 
-Use `figma:get_design_context` with fileKey="{figma_file_key}" and nodeId="{figma_node_id}" to extract the design properties.
+Call `figma:use_figma` with fileKey="{figma_file_key}" and this code:
 
-## Live Page
+```javascript
+{figma_extract_script}
+```
 
-- **URL:** {page_url}
+description: "Extract element inventory"
 
-Navigate to this URL using Playwright, then extract computed styles from the DOM.
-
-## Output
-
-Output ONLY a JSON object with findings (same format as code review findings)."""
+Return the JSON output."""
 
     options = ClaudeAgentOptions(
         permission_mode="dontAsk",
         model=model,
         cwd=cwd,
-        max_turns=max_turns,
+        max_turns=3,
         include_partial_messages=True,
     )
 
-    result, last_text = await _run_query(prompt, options, "design")
-
-    findings: list[Finding] = []
+    result, last_text = await _run_query(prompt, options, "figma-extract")
+    cost = result.total_cost_usd or 0.0
     text = result.result or last_text
     parsed = _extract_json(text)
-    if parsed:
-        output = ReviewOutput.model_validate(parsed)
-        for f in output.findings:
-            f.source_reviewer = "design"
-        findings = output.findings
-    elif text:
-        warn("design", f"Could not parse JSON: {text[:200]}")
+    if not parsed:
+        warn("figma-extract", f"Could not parse inventory JSON: {(text or '')[:200]}")
+    return parsed, cost
 
+
+async def extract_dom_inventory(
+    extractor_prompt: str,
+    page_url: str,
+    dom_extract_script: str,
+    cwd: Path,
+    model: str | None = None,
+) -> tuple[dict | None, float]:
+    prompt = f"""{extractor_prompt}
+
+---
+
+## Page URL
+{page_url}
+
+## Extraction Script
+
+Navigate to the URL, then call `browser_evaluate` with this script:
+
+```javascript
+{dom_extract_script}
+```
+
+Return the JSON output."""
+
+    options = ClaudeAgentOptions(
+        permission_mode="dontAsk",
+        model=model,
+        cwd=cwd,
+        max_turns=5,
+        include_partial_messages=True,
+    )
+
+    result, last_text = await _run_query(prompt, options, "dom-extract")
     cost = result.total_cost_usd or 0.0
-    return findings, cost
+    text = result.result or last_text
+    parsed = _extract_json(text)
+    if not parsed:
+        warn("dom-extract", f"Could not parse inventory JSON: {(text or '')[:200]}")
+    return parsed, cost
