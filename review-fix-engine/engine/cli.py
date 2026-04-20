@@ -26,6 +26,9 @@ def parse_args() -> tuple[Config, Path | None]:
     parser.add_argument("--lint-cmd", type=str, default="", help="Lint command for gates (e.g. 'eslint .')")
     parser.add_argument("--build-cmd", type=str, default="", help="Build command for gates (e.g. 'tsc --noEmit')")
     parser.add_argument("--output-json", type=Path, help="Write results JSON to file")
+    parser.add_argument("--dev-cmd", type=str, default="", help="Dev server command (e.g. 'npm run dev')")
+    parser.add_argument("--dev-port", type=int, default=3000, help="Dev server port (default: 3000)")
+    parser.add_argument("--skip-design", action="store_true", help="Skip design mismatch check")
     parser.add_argument("-v", "--verbose", action="store_true", help="Show full LLM streaming output")
     parser.add_argument("--model", type=str, default="anthropic.claude-4-6-sonnet[1m]", help="Model for reviewer agents (default: sonnet)")
     parser.add_argument("--no-fix", action="store_true", help="Skip fix phase (review only)")
@@ -44,6 +47,9 @@ def parse_args() -> tuple[Config, Path | None]:
         test_cmd=args.test_cmd,
         lint_cmd=args.lint_cmd,
         build_cmd=args.build_cmd,
+        dev_cmd=args.dev_cmd,
+        dev_port=args.dev_port,
+        skip_design=args.skip_design,
     )
     if args.repo:
         config.repo = args.repo
