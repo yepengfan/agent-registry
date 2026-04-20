@@ -1,0 +1,185 @@
+=== Agent Registry — Test Suite ===
+
+--- Frontmatter Parser ---
+  PASS: frontmatter parser tests all pass
+
+--- Profile Module ---
+  PASS: profile module tests all pass
+
+--- Agent Installation ---
+  PASS: agent file created
+  PASS: has registry path comment
+  PASS: frontmatter stripped
+  PASS: skill dependency auto-installed
+
+--- Behavior Injection ---
+  PASS: agent with behaviors installed
+  PASS: has behaviors start marker
+  PASS: has behaviors end marker
+  PASS: behavior content injected
+  PASS: behavior content includes rule
+  PASS: agent body still present
+  PASS: behaviors appear before body
+
+--- Missing Behavior Error ---
+[31mError: Behavior not found: nonexistent (expected at behaviors/nonexistent.md)[0m
+  PASS: missing behavior rejects install
+
+--- Agent Without Behaviors Unchanged ---
+  PASS: no behaviors markers when none declared
+  PASS: plain body present
+
+--- Skill Installation ---
+  PASS: skill symlink created
+  PASS: symlink points to registry
+
+--- Orchestrator Subagent Auto-Install ---
+  PASS: orchestrator installed
+  PASS: subagent sub-a auto-installed
+  PASS: subagent sub-b auto-installed
+
+--- Uninstall ---
+  PASS: agent exists before uninstall
+  PASS: agent removed after uninstall
+
+--- Uninstall Subagent Warning ---
+  PASS: warns about orchestrator dependency
+
+--- Uninstall Orchestrator Keeps Subagents ---
+  PASS: orchestrator removed
+  PASS: subagent kept
+
+--- Circular Dependency Guard ---
+  PASS: circular dependency does not hang
+
+--- Name Validation ---
+[31mError: Invalid name: "../traversal". Only alphanumeric, hyphens, and underscores allowed.[0m
+  PASS: rejects path traversal
+[31mError: Invalid name: ".hidden". Only alphanumeric, hyphens, and underscores allowed.[0m
+  PASS: rejects hidden dir name
+[31mError: Invalid name: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa". Maximum 128 characters.[0m
+  PASS: rejects name > 128 chars
+
+--- List Command ---
+  PASS: list succeeds
+  PASS: list shows agents
+
+--- Integration: Full Lifecycle ---
+  PASS: install all succeeds
+  PASS: status shows installed
+  PASS: uninstall all succeeds
+  PASS: status shows not installed
+
+--- Integration: Project Mode ---
+  PASS: CLAUDE.md created
+  PASS: CLAUDE.md has agent content
+  PASS: ref paths rewritten
+  PASS: ref docs copied
+
+--- Update Command ---
+  PASS: initial install has v1 content
+  PASS: after update has v2 content
+  PASS: after update v1 content gone
+
+--- List Shows Behaviors ---
+  PASS: list shows behaviors section
+  PASS: list shows my-rule
+  PASS: list shows description
+
+--- Criteria Injection ---
+  PASS: agent with criteria installed
+  PASS: has criteria start marker
+  PASS: has criteria end marker
+  PASS: criteria content injected
+  PASS: criteria content includes rule
+  PASS: agent body still present
+  PASS: criteria appear before body
+
+--- Missing Criteria Error ---
+[31mError: Criteria not found: nonexistent (expected at criteria/nonexistent.md)[0m
+  PASS: missing criteria rejects install
+
+--- Agent Without Criteria Unchanged ---
+  PASS: no criteria markers when none declared
+  PASS: plain body present
+
+--- Both Behaviors and Criteria ---
+  PASS: has both behavior and criteria markers
+  PASS: behaviors before criteria
+  PASS: criteria before body
+
+--- List Shows Criteria ---
+  PASS: list shows criteria section
+  PASS: list shows my-criterion
+  PASS: list shows criteria description
+  PASS: gate:true criterion shows [gate] tag
+  PASS: gate:false criterion shows [advisory] tag
+
+--- Status Shows Criteria ---
+  PASS: status shows criteria for agent
+
+--- Update Picks Up Criteria Changes ---
+  PASS: initial criteria install has v1
+  PASS: after update has v2 criteria
+  PASS: after update v1 criteria gone
+
+--- List Shows Profiles ---
+  PASS: list shows profiles section
+  PASS: list shows frontend profile
+  PASS: list shows detect files
+  PASS: list shows profile description
+
+--- Agent Definition With Color ---
+  PASS: command file created
+  PASS: agent definition file created
+  PASS: agent def has color
+  PASS: agent def has name
+  PASS: agent def has description
+  PASS: agent def has model
+  PASS: agent def has tools as csv
+  PASS: agent def has body
+  PASS: agent def has registry path
+
+--- Agent Without Color Skips Agent Definition ---
+  PASS: command file created
+  PASS: no agent definition when no color
+
+--- Uninstall Removes Agent Definition ---
+  PASS: both files exist before uninstall
+  PASS: command file removed
+  PASS: agent definition removed
+
+--- isAgentInstalled Checks Both Directories ---
+  PASS: command file removed
+  PASS: still detected as installed via agents dir
+
+--- getSkillType Detection ---
+  PASS: commands skill returns commands
+  PASS: skillmd skill returns skillmd
+  PASS: empty dir returns null
+
+--- listSkills Discovers Both Types ---
+  PASS: listSkills includes pr-review-loop
+  PASS: listSkills includes slides
+
+--- SKILL.md Skill Install and Uninstall ---
+  PASS: skillmd symlink created
+  PASS: symlink points to registry skill dir
+  PASS: SKILL.md accessible via symlink
+  PASS: skillmd symlink removed after uninstall
+/Users/tedfan/Developer/agent-registry/test.js:726
+  assert(typeof counts === 'object', 'counts should be an object');
+  ^
+
+ReferenceError: assert is not defined
+    at Object.<anonymous> (/Users/tedfan/Developer/agent-registry/test.js:726:3)
+    at Module._compile (node:internal/modules/cjs/loader:1692:14)
+    at Object..js (node:internal/modules/cjs/loader:1824:10)
+    at Module.load (node:internal/modules/cjs/loader:1427:32)
+    at Module._load (node:internal/modules/cjs/loader:1250:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)
+    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:152:5)
+    at node:internal/main/run_main_module:33:47
+
+Node.js v24.4.1

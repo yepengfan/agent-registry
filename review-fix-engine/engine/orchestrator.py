@@ -82,19 +82,30 @@ def _gates_summary(config: Config) -> str:
 
 
 def _read_file_contexts(findings: list[Finding], cwd: Path, context_lines: int = 20) -> dict[str, str]:
-    contexts: dict[str, str] = {}
+    # Group findings by file so every finding gets context, not just the first per file
+    by_file: dict[str, list[Finding]] = {}
     for f in findings:
-        if f.file in contexts:
-            continue
-        file_path = cwd / f.file
+        by_file.setdefault(f.file, []).append(f)
+
+    contexts: dict[str, str] = {}
+    for file_rel, file_findings in by_file.items():
+        file_path = cwd / file_rel
         if not file_path.is_file():
             continue
         try:
             lines = file_path.read_text(encoding="utf-8", errors="replace").splitlines()
-            start = max(0, f.line_start - 1 - context_lines)
-            end = min(len(lines), f.line_end + context_lines)
-            numbered = [f"{i+1:4d} | {lines[i]}" for i in range(start, end)]
-            contexts[f.file] = "\n".join(numbered)
+            windows: list[str] = []
+            captured: list[tuple[int, int]] = []
+            for f in file_findings:
+                start = max(0, f.line_start - 1 - context_lines)
+                end = min(len(lines), f.line_end + context_lines)
+                # Skip if this range is fully covered by an already-captured window
+                if any(s <= start and end <= e for s, e in captured):
+                    continue
+                numbered = [f"{i+1:4d} | {lines[i]}" for i in range(start, end)]
+                windows.append("\n".join(numbered))
+                captured.append((start, end))
+            contexts[file_rel] = "\n...\n".join(windows)
         except Exception:
             continue
     return contexts
