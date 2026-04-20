@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Use keyring token (GITHUB_TOKEN env var often has insufficient scopes)
+unset GITHUB_TOKEN 2>/dev/null || true
+
 # Resolve symlinks (npm global install creates symlinks in bin/)
 SOURCE="$0"
 while [ -L "$SOURCE" ]; do
