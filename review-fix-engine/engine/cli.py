@@ -25,7 +25,7 @@ def parse_args() -> tuple[Config, Path | None]:
     parser.add_argument("--test-cmd", type=str, default="npm test")
     parser.add_argument("--output-json", type=Path, help="Write results JSON to file")
     parser.add_argument("-q", "--quiet", action="store_true", help="Suppress LLM streaming output, show only progress")
-    parser.add_argument("--model", type=str, default="sonnet", help="Model for reviewer agents (default: sonnet)")
+    parser.add_argument("--model", type=str, default="anthropic.claude-4-6-sonnet[1m]", help="Model for reviewer agents (default: sonnet)")
     args = parser.parse_args()
 
     config = Config(

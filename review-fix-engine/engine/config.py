@@ -30,7 +30,7 @@ class Config:
     fixer_max_turns: int = 30
     score_threshold: int = 5
 
-    model: str = "sonnet"
+    model: str = "anthropic.claude-4-6-sonnet[1m]"
     reviewers: list[str] = field(default_factory=lambda: ["security", "logic", "edge_case"])
 
     state_dir: str = ".pr-review-state"
