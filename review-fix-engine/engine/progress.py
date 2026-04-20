@@ -64,32 +64,29 @@ def ground_result(grounded: list, dropped: list, duration_s: float):
         print(f"  {C.RED}\u2717{C.RESET} {d.get('id', '?')}: {d.get('grounding_error', '?')}", flush=True)
 
 
+# --- Quiet-mode progress (single line on stderr) ---
+
 _SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 _tag_state: dict[str, dict] = {}
 _reviewer_order: list[str] = []
 _spin_idx = 0
 _last_render = 0.0
-_RENDER_INTERVAL = 0.15
 _stderr = sys.stderr
-_block_initialized = False
+_initialized = False
 _refresh_task = None
 
 
 def init_reviewers(tags: list[str]):
-    global _block_initialized
+    global _initialized
     _reviewer_order.clear()
     _reviewer_order.extend(tags)
     _tag_state.clear()
     for tag in tags:
         _tag_state[tag] = {
-            "tokens": 0, "msgs": 0, "elapsed": 0.0,
-            "start": time.monotonic(), "snippet": "", "done": False,
-            "done_line": "",
+            "tokens": 0, "msgs": 0,
+            "start": time.monotonic(), "done": False,
         }
-    for _ in tags:
-        _stderr.write("\n")
-    _stderr.flush()
-    _block_initialized = True
+    _initialized = True
 
 
 async def start_progress_ticker():
@@ -99,8 +96,8 @@ async def start_progress_ticker():
     async def _tick():
         while True:
             await asyncio.sleep(1.0)
-            if _block_initialized and any(not s.get("done") for s in _tag_state.values()):
-                _render_block(force=True)
+            if _initialized and any(not s.get("done") for s in _tag_state.values()):
+                _render_line()
 
     _refresh_task = asyncio.create_task(_tick())
 
@@ -115,9 +112,8 @@ def stop_progress_ticker():
 def _get_tag_state(tag: str) -> dict:
     if tag not in _tag_state:
         _tag_state[tag] = {
-            "tokens": 0, "msgs": 0, "elapsed": 0.0,
-            "start": time.monotonic(), "snippet": "", "done": False,
-            "done_line": "",
+            "tokens": 0, "msgs": 0,
+            "start": time.monotonic(), "done": False,
         }
     return _tag_state[tag]
 
@@ -134,55 +130,55 @@ def update_progress(tag: str, msg_count: int, elapsed: float):
     if state["done"]:
         return
     state["msgs"] = msg_count
-    state["elapsed"] = elapsed
-    _render_block()
 
 
 def finish_progress(tag: str, findings_count: int, cost: float, duration: float):
     state = _get_tag_state(tag)
     state["done"] = True
-    state["done_line"] = (
+    _clear_line()
+    print(
         f"  {C.CYAN}[{tag}]{C.RESET}  "
         f"{C.GREEN}\u2713{C.RESET} {findings_count} findings "
-        f"{C.DIM}(${cost:.2f}, {duration:.0f}s){C.RESET}"
+        f"{C.DIM}(${cost:.2f}, {duration:.0f}s){C.RESET}",
+        flush=True,
     )
-    _render_block(force=True)
 
 
-def _render_block(force: bool = False):
-    global _spin_idx, _last_render
-    if not _block_initialized or not _reviewer_order:
+def _render_line():
+    global _spin_idx
+    if not _initialized or not _reviewer_order:
         return
-    now = time.monotonic()
-    if not force and now - _last_render < _RENDER_INTERVAL:
-        return
-    _last_render = now
     _spin_idx += 1
-
-    n = len(_reviewer_order)
+    now = time.monotonic()
     spin = _SPINNER[_spin_idx % len(_SPINNER)]
-    max_tag_len = max(len(t) for t in _reviewer_order)
 
-    _stderr.write(f"\033[{n}A")
-
+    active = []
     for tag in _reviewer_order:
         s = _tag_state.get(tag, {})
         if s.get("done"):
-            line = s.get("done_line", "")
-        else:
-            padded = tag.ljust(max_tag_len)
-            snippet = s.get("snippet", "").replace("\n", " ").strip()
-            if len(snippet) > 35:
-                snippet = snippet[:32] + "..."
-            detail = f"{s.get('msgs', 0)}msg"
-            if s.get("tokens"):
-                detail += f" {s['tokens']}t"
-            if snippet:
-                detail += f" {snippet}"
-            elapsed = time.monotonic() - s.get("start", now)
-            line = f"  {C.CYAN}[{padded}]{C.RESET}  {C.MAGENTA}{spin}{C.RESET} {detail} {C.DIM}({elapsed:.0f}s){C.RESET}"
-        _stderr.write(f"\r\033[2K{line}\n")
+            continue
+        elapsed = now - s.get("start", now)
+        part = f"{tag}:{s.get('msgs', 0)}msg"
+        if s.get("tokens"):
+            part += f" {s['tokens']}t"
+        part += f"({elapsed:.0f}s)"
+        active.append(part)
 
+    if not active:
+        return
+
+    cols = _terminal_width()
+    status = " | ".join(active)
+    max_len = cols - 5
+    if len(status) > max_len:
+        status = status[:max_len - 3] + "..."
+
+    _stderr.write(f"\r\033[2K {spin} {status}")
+    _stderr.flush()
+
+
+def _clear_line():
+    _stderr.write("\r\033[2K")
     _stderr.flush()
 
 
@@ -205,7 +201,6 @@ def sdk_message(message, tag: str):
                 if _quiet:
                     state = _get_tag_state(tag)
                     state["tokens"] += len(text.split())
-                    state["snippet"] = text
                 else:
                     sys.stdout.write(f"{C.DIM}{text}{C.RESET}")
                     sys.stdout.flush()
