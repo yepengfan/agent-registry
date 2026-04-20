@@ -1,7 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ENGINE_DIR="$(cd "$(dirname "$0")/../review-fix-engine" && pwd)"
+# Resolve symlinks (npm global install creates symlinks in bin/)
+SOURCE="$0"
+while [ -L "$SOURCE" ]; do
+    DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
+    SOURCE="$(readlink "$SOURCE")"
+    [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPT_DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
+
+ENGINE_DIR="$SCRIPT_DIR/../review-fix-engine"
 VENV="$ENGINE_DIR/.venv"
 
 if ! command -v python3 &>/dev/null; then
